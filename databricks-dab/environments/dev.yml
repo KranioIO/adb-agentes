@@ -1,0 +1,17 @@
+environment:
+  name: dev
+  cluster:
+    num_workers: 2
+    spark_version: "7.3.x-scala2.12"
+    node_type_id: "i3.xlarge"
+    spark_conf:
+      "spark.databricks.cluster.profile": "serverless"
+  libraries:
+    - pypi:
+        package: "numpy"
+    - pypi:
+        package: "pandas"
+  environment_variables:
+    ENVIRONMENT: "development"
+    DATABASE_URL: "jdbc:postgresql://dev-db:5432/mydb"
+    API_KEY: "your_dev_api_key"

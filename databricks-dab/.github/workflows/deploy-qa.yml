@@ -1,0 +1,28 @@
+name: Deploy to QA
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Databricks CLI
+        run: |
+          pip install databricks-cli
+          databricks configure --token <<EOF
+          ${{ secrets.DATABRICKS_HOST }}
+          ${{ secrets.DATABRICKS_TOKEN }}
+          EOF
+
+      - name: Deploy to QA
+        run: |
+          databricks workspace import_dir ./notebooks /Workspace/YourPath/Notebooks
+          databricks jobs create --json-file ./databricks.yml
+          # Add additional deployment steps as necessary
