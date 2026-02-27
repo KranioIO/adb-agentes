@@ -1,35 +1,78 @@
-name: databricks-dab
-version: 1.0.0
-description: Databricks Asset Bundle for CI/CD with multi-environment support
+bundle:
+  name: projet-demo
 
-# shared resource paths
-notebooks:
-  path: notebooks
-volumes:
-  path: volume
-catalog:
-  path: catalog
+variables:
+  target_catalog:
+    description: "Catalogue cible"
+    default: main  # Changez par votre catalogue dev
 
-# environment-specific targets and variables
+resources:
+  # 1. Création du Volume dans Unity Catalog
+  volumes:
+    mon_volume_entree:
+      name: mon_volume_entree
+      catalog_name: ${var.target_catalog}
+      schema_name: default
 
-environments:
+  # 2. Définition du Job pour exécuter le notebook
+  jobs:
+    job_import_donnees:
+      name: "Demo_Import_Excel_to_Table"
+      tasks:
+        - task_key: main_task
+          new_cluster:
+            num_workers: 1
+            spark_version: "13.3.x-scala2.12"
+            node_type_id: "Standard_DS3_v2"
+          notebook_task:
+            notebook_path: ./notebooks/import_data.py
+            base_parameters:
+              catalog: ${var.target_catalog}
+
+targets:
   dev:
-    target:
+    workspace:
       host: https://adb-1194260751860413.13.azuredatabricks.net
-      token: ${DATABRICKS_TOKEN}
     variables:
-      unity_catalog: main_dev
-    volumes:
-      - name: dev_volume
-        path: /mnt/dev
-  qa:
-    target:
-      host: https://adb-1832665218446849.9.azuredatabricks.net
-      token: ${DATABRICKS_TOKEN}
-    variables:
-      unity_catalog: main_qa
-    volumes:
-      - name: qa_volume
-        path: /mnt/qa
+      target_catalog: main_dev # Votre catalogue de test
 
-# end of environments
+
+
+
+
+# name: databricks-dab
+# version: 1.0.0
+# description: Databricks Asset Bundle for CI/CD with multi-environment support
+# 
+# # shared resource paths
+# notebooks:
+#   path: notebooks
+# volumes:
+#   path: volume
+# catalog:
+#   path: catalog
+# 
+# # environment-specific targets and variables
+# 
+# environments:
+#   dev:
+#     target:
+#       host: https://adb-1194260751860413.13.azuredatabricks.net
+#       token: ${DATABRICKS_TOKEN}
+#     variables:
+#       unity_catalog: main_dev
+#     volumes:
+#       - name: dev_volume
+#         path: /mnt/dev
+#   qa:
+#     target:
+#       host: https://adb-1832665218446849.9.azuredatabricks.net
+#       token: ${DATABRICKS_TOKEN}
+#     variables:
+#       unity_catalog: main_qa
+#     volumes:
+#       - name: qa_volume
+#         path: /mnt/qa
+# 
+# # end of environments
+# 

@@ -13,9 +13,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Databricks CLI
+      - name: Install Databricks CLI (Go)
         run: |
-          pip install databricks-cli
+          # install via le script officiel
+          curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | bash
           databricks configure --token <<EOF
           ${{ secrets.DATABRICKS_HOST }}
           ${{ secrets.DATABRICKS_TOKEN }}
@@ -23,6 +24,5 @@ jobs:
 
       - name: Deploy to QA
         run: |
-          databricks workspace import_dir ./notebooks /Workspace/YourPath/Notebooks
-          databricks jobs create --json-file ./databricks.yml
+          databricks bundle deploy -t qa
           # Add additional deployment steps as necessary
