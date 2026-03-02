@@ -1,3 +1,6 @@
+# Databricks notebook source
+
+# COMMAND ----------
 # Lecture du fichier depuis le Volume Unity Catalog
 # Le chemin sera : /Volumes/<catalog>/<schema>/<volume_name>/data_source.csv
 
