@@ -1,0 +1,29 @@
+name: Deploy to QA
+
+on:
+  push:
+    branches:
+      - release
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install Databricks CLI (Go)
+        run: |
+          # install via le script officiel
+          curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | bash
+          databricks configure --token <<EOF
+          ${{ secrets.DATABRICKS_HOST }}
+          ${{ secrets.DATABRICKS_TOKEN }}
+          EOF
+
+      - name: Deploy to QA
+        run: |
+          databricks bundle deploy -t qa
+          # Add additional deployment steps as necessary
+          
