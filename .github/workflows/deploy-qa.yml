@@ -13,17 +13,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Install Databricks CLI (Go)
+      - name: Install Databricks CLI
         run: |
-          # install via le script officiel
-          curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | bash
-          databricks configure --token <<EOF
-          ${{ secrets.DATABRICKS_HOST }}
-          ${{ secrets.DATABRICKS_TOKEN }}
-          EOF
+          curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-      - name: Deploy to QA
+      - name: Deploy Bundle to QA
         run: |
+          # La CLI va lire directement DATABRICKS_HOST et DATABRICKS_TOKEN ci-dessous
           databricks bundle deploy -t qa
-          # Add additional deployment steps as necessary
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}
           

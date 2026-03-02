@@ -40,7 +40,15 @@ targets:
     variables:
       target_catalog: main_dev # Votre catalogue de test
 
-
+  qa:   
+    mode: production
+    workspace:
+      host: https://adb-1832665218446849.9.azuredatabricks.net/
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: hive_metastore
+      schema: ${workspace.current_user.short_name}
+      
 
 
 
