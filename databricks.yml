@@ -41,7 +41,11 @@ targets:
       target_catalog: main_dev # Votre catalogue de test
 
 
-
+  qa:   
+    mode: production
+    workspace:
+      host: https://adb-1832665218446849.9.azuredatabricks.net/
+      root_path: /Shared/${bundle.name}/${bundle.target}
 
 
 # name: databricks-dab
