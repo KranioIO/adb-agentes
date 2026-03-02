@@ -4,7 +4,11 @@ bundle:
 variables:
   target_catalog:
     description: "Catalogue cible"
-    default: main  # Changez par votre catalogue dev
+    default: dev  # Changez par votre catalogue dev
+
+sync:
+  include:
+    - ./volume/**
 
 resources:
   # 1. Création du Volume dans Unity Catalog
@@ -25,7 +29,7 @@ resources:
             spark_version: "13.3.x-scala2.12"
             node_type_id: "Standard_DS3_v2"
           notebook_task:
-            notebook_path: ./notebooks/import_data.py
+            notebook_path: ./notebooks/import_data.ipynb
             base_parameters:
               catalog: ${var.target_catalog}
 
