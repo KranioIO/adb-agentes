@@ -4,7 +4,7 @@ bundle:
 variables:
   target_catalog:
     description: "Catalogue cible"
-    default: dev  # Changez par votre catalogue dev
+    default: qa  # Changez par votre catalogue dev
 
 sync:
   include:
