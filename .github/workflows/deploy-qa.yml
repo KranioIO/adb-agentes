@@ -17,6 +17,15 @@ jobs:
         run: |
           curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
+
+      - name: Sync Dev Volume to QA Volume
+        run: |
+          # 1. On liste les fichiers du Dev (nécessite DATABRICKS_HOST_DEV)
+          # 2. On les copie vers la QA (nécessite DATABRICKS_HOST_QA)
+          # Attention : C'est complexe car la CLI ne peut pas gérer deux hosts en une commande
+          
+          databricks fs cp -r dbfs:/Volumes/main_dev/default/mon_volume_entree dbfs:/Volumes/main_qa/default/mon_volume_entree
+
       - name: Deploy Bundle to QA
         run: |
           # La CLI va lire directement DATABRICKS_HOST et DATABRICKS_TOKEN ci-dessous
@@ -24,4 +33,10 @@ jobs:
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}
-          
+
+      - name: Upload Files to QA Volume
+        run: |
+          databricks fs cp ./volume/data_source.csv dbfs:/Volumes/main_qa/default/mon_volume_entree/data_source.csv --overwrite
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}         
