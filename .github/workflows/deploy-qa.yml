@@ -18,13 +18,44 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
 
-      - name: Sync Dev Volume to QA Volume
+      #- name: Sync Dev Volume to QA Volume
+      #  run: |
+      #    # 1. On liste les fichiers du Dev (nécessite DATABRICKS_HOST_DEV)
+      #    # 2. On les copie vers la QA (nécessite DATABRICKS_HOST_QA)
+      #    # Attention : C'est complexe car la CLI ne peut pas gérer deux hosts en une commande
+      #    
+      #    databricks fs cp -r dbfs:/Volumes/main_dev/default/mon_volume_entree dbfs:/Volumes/main_qa/default/mon_volume_entree
+
+      - name: Transfer Volumes from Dev to QA
         run: |
-          # 1. On liste les fichiers du Dev (nécessite DATABRICKS_HOST_DEV)
-          # 2. On les copie vers la QA (nécessite DATABRICKS_HOST_QA)
-          # Attention : C'est complexe car la CLI ne peut pas gérer deux hosts en une commande
-          
-          databricks fs cp -r dbfs:/Volumes/main_dev/default/mon_volume_entree dbfs:/Volumes/main_qa/default/mon_volume_entree
+          # 1. Lister tous les fichiers du Volume Dev (CSV et JSON)
+          # On utilise le profil ou les variables d'env du DEV pour lister
+          echo "Listing files from Dev Volume..."
+          FILES=$(DATABRICKS_HOST=${{ secrets.DATABRICKS_HOST_DEV }} \
+                  DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN_DEV }} \
+                  databricks fs ls dbfs:/Volumes/main_dev/default/mon_volume_entree | awk '{print $1}')
+
+          # 2. Boucler sur chaque fichier trouvé
+          for FILE_PATH in $FILES; do
+            # On extrait le nom du fichier (ex: data.csv) du chemin complet
+            FILENAME=$(basename $FILE_PATH)
+            
+            # On vérifie si c'est un CSV ou un JSON
+            if [[ "$FILENAME" == *.csv ]] || [[ "$FILENAME" == *.json ]]; then
+              echo "Transferring $FILENAME to QA..."
+              
+              # COPIE DIRECTE : 
+              # On lit depuis DEV et on écrit vers QA
+              # Note : 'fs cp' peut prendre deux hosts différents si on utilise les bons flags
+              databricks fs cp "dbfs:/Volumes/main_dev/default/mon_volume_entree/$FILENAME" \
+                               "dbfs:/Volumes/main_qa/default/mon_volume_entree/$FILENAME" \
+                               --overwrite
+            fi
+          done
+        env:
+          # Ici on met les secrets de la QA par défaut pour l'écriture
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}
 
       - name: Deploy Bundle to QA
         run: |
@@ -34,9 +65,9 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}
 
-      - name: Upload Files to QA Volume
-        run: |
-          databricks fs cp ./volume/data_source.csv dbfs:/Volumes/main_qa/default/mon_volume_entree/data_source.csv --overwrite
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}         
+      #- name: Upload Files to QA Volume
+      #  run: |
+      #    databricks fs cp ./volume/data_source_qa.csv dbfs:/Volumes/main_qa/default/mon_volume_qa/data_source_qa.csv --overwrite
+      #  env:
+      #    DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
+      #    DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}         
