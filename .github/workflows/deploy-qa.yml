@@ -26,37 +26,19 @@ jobs:
       #    
       #    databricks fs cp -r dbfs:/Volumes/main_dev/default/mon_volume_entree dbfs:/Volumes/main_qa/default/mon_volume_entree
 
-      - name: Transfer Volumes from Dev to QA
+      - name: Transfer via Transit
         run: |
-          # 1. Lister tous les fichiers du Volume Dev (CSV et JSON)
-          # On utilise le profil ou les variables d'env du DEV pour lister
-          echo "Listing files from Dev Volume..."
-          FILES=$(DATABRICKS_HOST=${{ secrets.DATABRICKS_HOST_DEV }} \
-                  DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN_DEV }} \
-                  databricks fs ls dbfs:/Volumes/main_dev/default/mon_volume_entree | awk '{print $1}')
-
-          # 2. Boucler sur chaque fichier trouvé
-          for FILE_PATH in $FILES; do
-            # On extrait le nom du fichier (ex: data.csv) du chemin complet
-            FILENAME=$(basename $FILE_PATH)
-            
-            # On vérifie si c'est un CSV ou un JSON
-            if [[ "$FILENAME" == *.csv ]] || [[ "$FILENAME" == *.json ]]; then
-              echo "Transferring $FILENAME to QA..."
-              
-              # COPIE DIRECTE : 
-              # On lit depuis DEV et on écrit vers QA
-              # Note : 'fs cp' peut prendre deux hosts différents si on utilise les bons flags
-              databricks fs cp "dbfs:/Volumes/main_dev/default/mon_volume_entree/$FILENAME" \
-                               "dbfs:/Volumes/main_qa/default/mon_volume_entree/$FILENAME" \
-                               --overwrite
-            fi
-          done
-        env:
-          # Ici on met les secrets de la QA par défaut pour l'écriture
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}
-
+          # 1. Download from DEV
+          export DATABRICKS_HOST=${{ secrets.DATABRICKS_HOST_DEV }}
+          export DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN_DEV }}
+          mkdir -p ./temp_transfer
+          databricks fs cp -r dbfs:/Volumes/main_dev/default/mon_volume_entree ./temp_transfer
+          
+          # 2. Upload to QA
+          export DATABRICKS_HOST=${{ secrets.DATABRICKS_HOST_QA }}
+          export DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN_QA }}
+          databricks fs cp -r ./temp_transfer dbfs:/Volumes/main_qa/default/mon_volume_entree --overwrite
+          
       - name: Deploy Bundle to QA
         run: |
           # La CLI va lire directement DATABRICKS_HOST et DATABRICKS_TOKEN ci-dessous
