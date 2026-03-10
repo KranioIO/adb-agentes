@@ -1,62 +1,27 @@
-name: Deploy to QA
+name: DABs Deployment
 
 on:
   push:
-    branches:
-      - devolpment
+    branches: [development, release, main]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
+      - uses: actions/checkout@v3
       - name: Install Databricks CLI
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-
-      #- name: Sync Dev Volume to QA Volume
-      #  run: |
-      #    # 1. On liste les fichiers du Dev (nécessite DATABRICKS_HOST_DEV)
-      #    # 2. On les copie vers la QA (nécessite DATABRICKS_HOST_QA)
-      #    # Attention : C'est complexe car la CLI ne peut pas gérer deux hosts en une commande
-      #    
-      #    databricks fs cp -r dbfs:/Volumes/main_dev/default/mon_volume_entree dbfs:/Volumes/main_qa/default/mon_volume_entree
-
-      - name: Transfer via Transit (Isolated)
-        run: |
-          # Créer un dossier temporaire en dehors de la racine du projet Git
-          # pour éviter que la CLI ne détecte le fichier databricks.yml
-          mkdir -p /tmp/databricks_transit
-          
-          echo "--- Downloading from DEV ---"
-          # On lance la commande dans /tmp pour ignorer le bundle local
-          cd /tmp && DATABRICKS_HOST=${{ secrets.DATABRICKS_HOST_DEV }} \
-          DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN_DEV }} \
-          databricks fs cp -r dbfs:/Volumes/main_dev/default/mon_volume_entree ./databricks_transit
-          
-          echo "--- Uploading to QA ---"
-          # On fait la même chose pour l'upload
-          cd /tmp && DATABRICKS_HOST=${{ secrets.DATABRICKS_HOST_QA }} \
-          DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN_QA }} \
-          databricks fs cp -r ./databricks_transit dbfs:/Volumes/main_qa/default/mon_volume_entree --overwrite
-
-        # On ne définit PAS de env: au niveau du step pour éviter les conflits globaux
-
-      - name: Deploy Bundle to QA
-        run: |
-          # La CLI va lire directement DATABRICKS_HOST et DATABRICKS_TOKEN ci-dessous
-          databricks bundle deploy -t qa
+      - name: Deploy to DEV
+        if: github.ref == 'refs/heads/development'
+        run: databricks bundle deploy -t dev
         env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
 
-      #- name: Upload Files to QA Volume
-      #  run: |
-      #    databricks fs cp ./volume/data_source_qa.csv dbfs:/Volumes/main_qa/default/mon_volume_qa/data_source_qa.csv --overwrite
-      #  env:
-      #    DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
-      #    DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}         
+#      - name: Deploy to QA
+#        if: github.ref == 'refs/heads/release'
+#        run: databricks bundle deploy -t qa
+#        env:
+#          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
+#          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}

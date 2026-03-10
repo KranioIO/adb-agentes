@@ -24,6 +24,7 @@ resources:
 
 targets:
   dev:
+    mode: development
     default: true
     workspace:
       host: https://adb-1194260751860413.13.azuredatabricks.net
