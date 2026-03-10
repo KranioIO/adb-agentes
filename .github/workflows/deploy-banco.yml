@@ -1,0 +1,24 @@
+#name: DABs Deployment
+#
+#on:
+#  push:
+#    branches: [development, release, main]
+#
+#jobs:
+#  deploy:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: Login to Azure
+#        uses: azure/login@v1
+#        with:
+#          creds: ${{ secrets.AZURE_CREDENTIALS }}
+#
+#      - name: Deploy Databricks Bundle
+#              shell: bash
+#              run: |
+#                databricks bundle deploy -t qa
+#              env:
+#                ARM_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+#                ARM_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+#                ARM_TENANT_ID: ${{ secrets.TENANT_ID }}

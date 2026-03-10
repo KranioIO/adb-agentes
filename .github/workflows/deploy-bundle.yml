@@ -1,0 +1,27 @@
+name: DABs Deployment
+
+on:
+  push:
+    branches: [development, release, main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Databricks CLI
+        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Deploy to DEV
+        if: github.ref == 'refs/heads/development'
+        run: databricks bundle deploy -t dev
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+
+#      - name: Deploy to QA
+#        if: github.ref == 'refs/heads/release'
+#        run: databricks bundle deploy -t qa
+#        env:
+#          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
+#          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}
