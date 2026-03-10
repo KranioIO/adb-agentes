@@ -17,11 +17,6 @@ resources:
       catalog_name: ${var.target_catalog}
       schema_name: default
 
-  volume_test_qa:
-        name: mon_volume_qa
-        catalog_name: ${var.target_catalog}
-        schema_name: default
-
 targets:
   dev:
     mode: development
@@ -39,7 +34,7 @@ targets:
       root_path: /Shared/${bundle.name}/${bundle.target}
     variables:
       target_catalog: main_qa
-      target_volume: mon_volume_qa
+      target_volume: mon_volume_entree
 
 
 # name: databricks-dab
