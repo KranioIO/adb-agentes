@@ -9,13 +9,6 @@ sync:
   include:
     - ./volume/**
 
-resources:
-  # 1. Création du Volume dans Unity Catalog
-  volumes:
-    mon_volume_entree:
-      name: mon_volume_entree
-      catalog_name: ${var.target_catalog}
-      schema_name: default
 
 targets:
   dev:
@@ -34,42 +27,3 @@ targets:
       root_path: /Shared/${bundle.name}/${bundle.target}
     variables:
       target_catalog: main_qa
-      target_volume: mon_volume_entree
-
-
-# name: databricks-dab
-# version: 1.0.0
-# description: Databricks Asset Bundle for CI/CD with multi-environment support
-# 
-# # shared resource paths
-# notebooks:
-#   path: notebooks
-# volumes:
-#   path: volume
-# catalog:
-#   path: catalog
-# 
-# # environment-specific targets and variables
-# 
-# environments:
-#   dev:
-#     target:
-#       host: https://adb-1194260751860413.13.azuredatabricks.net
-#       token: ${DATABRICKS_TOKEN}
-#     variables:
-#       unity_catalog: main_dev
-#     volumes:
-#       - name: dev_volume
-#         path: /mnt/dev
-#   qa:
-#     target:
-#       host: https://adb-1832665218446849.9.azuredatabricks.net
-#       token: ${DATABRICKS_TOKEN}
-#     variables:
-#       unity_catalog: main_qa
-#     volumes:
-#       - name: qa_volume
-#         path: /mnt/qa
-# 
-# # end of environments
-# 
