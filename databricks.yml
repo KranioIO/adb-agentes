@@ -1,5 +1,5 @@
 bundle:
-  name: projet-demo
+  name: projet-test
 
 variables:
   target_catalog:

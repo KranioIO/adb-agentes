@@ -13,11 +13,20 @@ jobs:
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
       - name: Deploy to DEV
-        if: github.ref == 'refs/heads/development'
         run: databricks bundle deploy -t dev
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+          # Al NO enviar un TOKEN y enviar estas 3, la CLI se vuelve el SP
+          ARM_CLIENT_ID: ${{ secrets.AZURE_SP_CLIENT_ID_DEV }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+#      
+#      - name: Deploy to DEV
+#        if: github.ref == 'refs/heads/development'
+#        run: databricks bundle deploy -t dev
+#        env:
+#          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+#          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
 
 #      - name: Deploy to QA
 #        if: github.ref == 'refs/heads/release'
