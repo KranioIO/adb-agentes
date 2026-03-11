@@ -27,3 +27,4 @@ targets:
       root_path: /Shared/${bundle.name}/${bundle.target}
     variables:
       target_catalog: main_qa
+      
