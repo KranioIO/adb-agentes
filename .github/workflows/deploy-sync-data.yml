@@ -3,7 +3,7 @@ name: Deploy to QA
 on:
   push:
     branches:
-      - release
+      - development
 
 jobs:
   deploy:
