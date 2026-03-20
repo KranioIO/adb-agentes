@@ -1,0 +1,43 @@
+name: DABs Deployment
+
+on:
+  push:
+    branches: development
+
+jobs:
+  prepare:
+    runs-on: [self-hosted, QAHVSAPPGAH01]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setting Up BeyondTrust API_KEY
+        run: |
+          echo "API_KEY=${{ secrets.API_KEY }}" >> $GITHUB_ENV
+          echo "RUN_ENV=${{ github.ref_name == 'master' && 'prod' || 'qa' }}" >> $GITHUB_ENV
+
+      - name: Get Azure Client ID
+        id: get-client-id
+        run: |
+          python -c "import sys; sys.path.append('.github/scripts'); from get_creds import get_secret; secret = get_secret('SP_ADF_CLIENT_ID'); print(f'CLIENT_ID={secret}', file=open('$GITHUB_ENV','a'))"
+          echo "::add-mask::$(grep CLIENT_ID $GITHUB_ENV | cut -d'=' -f2)"
+
+      - name: Get Azure Client Secret
+        id: get-client-secret
+        run: |
+          python -c "import sys; sys.path.append('.github/scripts'); from get_creds import get_secret; secret = get_secret('SP_ADF_CLIENT_SECRET'); print(f'CLIENT_SECRET={secret}', file=open('$GITHUB_ENV','a'))"
+
+      - name: Get Azure Tenant ID
+        id: get-tenant-id
+        run: |
+          python -c "import sys; sys.path.append('.github/scripts'); from get_creds import get_secret; secret = get_secret('SP_ADF_TENANT_ID'); print(f'TENANT_ID={secret}', file=open('$GITHUB_ENV','a'))"
+          echo "::add-mask::$(grep TENANT_ID $GITHUB_ENV | cut -d'=' -f2)"
+
+
+      - name: Deploy to DEV
+        run: databricks bundle deploy -t dev
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          ARM_CLIENT_ID: ${{ env.CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ env.CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ env.TENANT_ID }}
+          DATABRICKS_TF_EXEC_PATH: /usr/local/bin/terraform
