@@ -7,12 +7,11 @@ variables:
 
 sync:
   include:
-    - datayanalytics/** # Solo incluye esta carpeta y todo su contenido
+    - notebooks/** # Solo incluye esta carpeta y todo su contenido
   exclude:
-    - .git/** # No queremos el historial de git en el workspace
-    - .vscode/** # No queremos archivos del editor
-    - "**/*.pyc"          # No queremos archivos basura de Python
-    - .databricks/** # Excluye metadatos locales del CLI
+    - .github/** # No queremos el historial de git en el workspace
+    - catalog/** # No queremos archivos del editor
+    - volume/**         # No queremos archivos basura de Python
 
 targets:
   dev:
