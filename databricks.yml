@@ -19,7 +19,7 @@ targets:
     default: true
     workspace:
       host: https://adb-1194260751860413.13.azuredatabricks.net
-      root_path: /Shared/${bundle.name}/${bundle.target}
+      root_path: /Shared/${bundle.name}
     run_as:
       service_principal_name: "a963eeab-b3eb-44fc-87c5-8365bf6a0a42"
 

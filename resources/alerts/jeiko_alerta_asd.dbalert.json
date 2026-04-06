@@ -1,0 +1,11 @@
+{
+  "evaluation": {
+    "source": {},
+    "comparison_operator": "EQUAL",
+    "threshold": {},
+    "notification": {}
+  },
+  "query_lines": [
+    "select \"hola\""
+  ]
+}

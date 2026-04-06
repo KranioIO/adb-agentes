@@ -1,0 +1,11 @@
+{
+  "evaluation": {
+    "source": {},
+    "comparison_operator": "EQUAL",
+    "threshold": {},
+    "notification": {}
+  },
+  "query_lines": [
+    "SELECT count(*) FROM main_dev.default.ma_table_scores WHERE score < 50"
+  ]
+}
