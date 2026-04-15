@@ -61,30 +61,29 @@ jobs:
             echo "🔍 Analyse de l'alerte : $NAME"
             
             # 1. Reconstrucción total del objeto para cumplir con el esquema v2
-            jq --arg WH "$QA_WH" --arg PATH "$QA_PATH" '
+            jq --arg WH "$QA_WH" --arg PATH "$QA_PATH" --arg DEF_COL "$DEFAULT_COLUMN" '
             {
               "display_name": .display_name,
               "query_text": (.query_text // ""), 
               "warehouse_id": $WH,
-              "parent_path": ($PATH),
+              "parent_path": $PATH,
               "evaluation": {
                 "comparison_operator": .evaluation.comparison_operator,
                 "threshold": .evaluation.threshold,
                 "source": {
-                  "name": (.evaluation.source.name // .evaluation.column_name // "cnt")
+                  # Si .evaluation.source.name no existe o es vacío, usa $DEF_COL
+                  "name": (.evaluation.source.name | select(. != null and . != "") // $DEF_COL)
                 }
               },
               "schedule": .schedule
             } | del(.. | nulls)
             ' "$file" > payload.json
             
-            # 2. Verificación de seguridad de query_text
-            QUERY_CHECK=$(jq -r '.query_text' payload.json)
-            if [ -z "$QUERY_CHECK" ] || [ "$QUERY_CHECK" == "null" ]; then
-              echo "⚠️ Saltando $NAME: query_text no encontrado o vacío."
-              continue
+            # 2. Validación rápida
+            if [ "$(jq -r '.evaluation.source.name' payload.json)" == "" ]; then
+                echo "⚠️ Error crítico: No se pudo asignar un nombre de columna a $NAME"
+                continue
             fi
-
             # 1. Vérifier si l'alerte existe en QA
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
         
