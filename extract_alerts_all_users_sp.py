@@ -5,7 +5,7 @@ import configparser
 import base64
 
 # --- CONFIGURATION ---
-PROFILE = "dev"  # Change en "dev" ou "qa" selon ton besoin
+PROFILE = "qa"  # Change en "dev" ou "qa" selon ton besoin
 DOMAIN_FILTER = "@kranio.io"
 OUTPUT_DIR = "resources/alerts"
 

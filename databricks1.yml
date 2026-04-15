@@ -1,0 +1,63 @@
+bundle:
+  name: projet-test-2
+
+variables:
+  target_catalog:
+    default: main_dev
+
+
+include:
+  - resources/alerts/*.yml
+  - resources/jobs/*.yml
+
+sync:
+  include:
+    - notebooks/** # Solo incluye esta carpeta y todo su contenido
+  exclude:
+    - .github/** # No queremos el historial de git en el workspace
+    - catalog/** # No queremos archivos del editor
+    - volume/**         # No queremos archivos basura de Python
+
+targets:
+  dev:
+    mode: production
+    default: true
+    workspace:
+      host: https://adb-1194260751860413.13.azuredatabricks.net
+      root_path: /Shared/${bundle.name}
+   # run_as:
+   #   service_principal_name: "a963eeab-b3eb-44fc-87c5-8365bf6a0a42"
+
+  qa:   
+    mode: production
+    workspace:
+      host: https://adb-1832665218446849.9.azuredatabricks.net
+      root_path: /Shared/${bundle.name}/${bundle.target}
+    variables:
+      target_catalog: main_qa
+      
+
+resources:
+  queries:
+    # 'query_maestra' es un alias interno para vincular objetos
+    query_maestra:
+      name: "Query 1 - Demo CI/CD"
+      # Cargamos el SQL desde un archivo externo para limpieza
+      query: ${file(resources/queries/query1.sql)}
+
+
+  alerts:
+    alerta_maestra:
+      display_name: "Alert 1 - Demo CI/CD"
+      # VÍNCULO MÁGICO: El Bundle inyecta el ID generado automáticamente
+      query_id: ${resources.queries.query_maestra.id}
+      
+      condition:
+        op: "GREATER_THAN"
+        threshold:
+          value:
+            double_value: 1
+      
+      # Configuración de re-intento y notificaciones
+      seconds_to_retrigger: 3600 # 1 hora
+      notify_on_ok: true

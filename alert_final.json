@@ -1,0 +1,22 @@
+{
+  "display_name": "Alert 1",
+  "evaluation": {
+    "comparison_operator": "GREATER_THAN",
+    "source": {
+      "name": "cnt"
+    },
+    "threshold": {
+      "value": {
+        "double_value": 1
+      }
+    }
+  },
+  "lifecycle_state": "ACTIVE",
+  "parent_path": "/Workspace/Users/stephane@kranio.io",
+  "query_text": "SELECT count(*) AS cnt FROM main_qa.default.ma_table_scores WHERE value < 50",
+  "schedule": {
+    "quartz_cron_schedule": "0 0 */1 * * ?",
+    "timezone_id": "America/Mexico_City"
+  },
+  "warehouse_id": "af6acdfdf7d45afd"
+}

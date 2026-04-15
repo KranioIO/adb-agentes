@@ -1,0 +1,17 @@
+resources:
+  jobs:
+    job_126833697424905:
+      name: tets 1
+      tasks:
+        - task_key: test1
+          email_notifications: {}
+          notebook_task:
+            notebook_path: ../../src/entrenamiento_modelo.py
+            source: WORKSPACE
+          run_if: ALL_SUCCESS
+      email_notifications: {}
+      max_concurrent_runs: 1
+      performance_target: PERFORMANCE_OPTIMIZED
+      queue:
+        enabled: true
+      webhook_notifications: {}
