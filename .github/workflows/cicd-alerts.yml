@@ -78,3 +78,4 @@ jobs:
               databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload.json
             fi
           done
+          
