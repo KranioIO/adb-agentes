@@ -14,6 +14,12 @@ jobs:
         run: |
           curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
+      - name: Debug Secrets (Safe)
+              run: |
+                if [ -z "${{ secrets.AZURE_SP_CLIENT_ID_DEV }}" ]; then echo "❌ CLIENT_ID is EMPTY"; else echo "✅ CLIENT_ID has value"; fi
+                if [ -z "${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}" ]; then echo "❌ CLIENT_SECRET is EMPTY"; else echo "✅ CLIENT_SECRET has value"; fi
+                if [ -z "${{ secrets.AZURE_TENANT_ID }}" ]; then echo "❌ TENANT_ID is EMPTY"; else echo "✅ TENANT_ID has value"; fi
+                databricks version
       # --- PASO 1: EXTRAER DE DEV ---
       - name: Extract from DEV
         env:
@@ -63,4 +69,3 @@ jobs:
               databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload.json
             fi
           done
-          
