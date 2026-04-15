@@ -65,7 +65,6 @@ jobs:
             jq --arg WH "$QA_WH" --arg PATH "$QA_PATH" \
               'del(.id, .create_time, .update_time, .owner_user_name, .effective_run_as, .evaluation.state, .evaluation.last_evaluated_at) | 
                .warehouse_id = $WH | 
-               .parent_path = $PATH |
                .query_text |= gsub("main_dev"; "main_qa")' "$file" > payload.json
 
             # Lógica de Idempotencia (¿Existe ya?)
