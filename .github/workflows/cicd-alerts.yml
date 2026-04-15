@@ -30,10 +30,11 @@ jobs:
       - name: Extract from DEV
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
-          DATABRICKS_CLIENT_ID: ${{ secrets.AZURE_SP_CLIENT_ID_DEV }}
-          DATABRICKS_CLIENT_SECRET: ${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}
-          DATABRICKS_AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          DATABRICKS_AUTH_TYPE: azure-client-secret
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+          #DATABRICKS_CLIENT_ID: ${{ secrets.AZURE_SP_CLIENT_ID_DEV }}
+          #DATABRICKS_CLIENT_SECRET: ${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}
+          #DATABRICKS_AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          #DATABRICKS_AUTH_TYPE: azure-client-secret
         run: |
           databricks auth describe
           mkdir -p temp_alerts
@@ -46,10 +47,11 @@ jobs:
       - name: Deploy to QA
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
-          DATABRICKS_CLIENT_ID: ${{ secrets.AZURE_SP_CLIENT_ID_DEV }}
-          DATABRICKS_CLIENT_SECRET: ${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}
-          DATABRICKS_AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          DATABRICKS_AUTH_TYPE: azure-client-secret
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}
+          #DATABRICKS_CLIENT_ID: ${{ secrets.AZURE_SP_CLIENT_ID_DEV }}
+          #DATABRICKS_CLIENT_SECRET: ${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}
+          #DATABRICKS_AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          #DATABRICKS_AUTH_TYPE: azure-client-secret
         run: |
           # ID del Warehouse en QA
           QA_WH="af6acdfdf7d45afd"
@@ -78,4 +80,3 @@ jobs:
               databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload.json
             fi
           done
-          
