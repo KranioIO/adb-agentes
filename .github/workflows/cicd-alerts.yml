@@ -18,9 +18,9 @@ jobs:
       - name: Extract from DEV
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
-          ARM_CLIENT_ID: ${{ env.AZURE_SP_CLIENT_ID_DEV }}
-          ARM_CLIENT_SECRET: ${{ env.AZURE_SP_CLIENT_SECRET_DEV }}
-          ARM_TENANT_ID: ${{ env.AZURE_TENANT_ID }}
+          DATABRICKS_CLIENT_ID: ${{ env.AZURE_SP_CLIENT_ID_DEV }}
+          DATABRICKS_CLIENT_SECRET: ${{ env.AZURE_SP_CLIENT_SECRET_DEV }}
+          DATABRICKS_AZURE_TENANT_ID: ${{ env.AZURE_TENANT_ID }}
         run: |
           mkdir -p temp_alerts
           # Extraemos todas las alertas de DEV
@@ -32,9 +32,9 @@ jobs:
       - name: Deploy to QA
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
-          ARM_CLIENT_ID: ${{ env.AZURE_SP_CLIENT_ID_DEV }}
-          ARM_CLIENT_SECRET: ${{ env.AZURE_SP_CLIENT_SECRET_DEV }}
-          ARM_TENANT_ID: ${{ env.AZURE_TENANT_ID }}
+          DATABRICKS_CLIENT_ID: ${{ env.AZURE_SP_CLIENT_ID_DEV }}
+          DATABRICKS_CLIENT_SECRET: ${{ env.AZURE_SP_CLIENT_SECRET_DEV }}
+          DATABRICKS_AZURE_TENANT_ID: ${{ env.AZURE_TENANT_ID }}
         run: |
           # ID del Warehouse en QA
           QA_WH="af6acdfdf7d45afd"
