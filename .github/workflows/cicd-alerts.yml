@@ -16,17 +16,23 @@ jobs:
 
       - name: Debug Secrets (Safe)
         run: |
-          if [ -z "${{ secrets.AZURE_SP_CLIENT_ID_DEV }}" ]; then echo "❌ CLIENT_ID is EMPTY"; else echo "✅ CLIENT_ID has value"; fi
-          if [ -z "${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}" ]; then echo "❌ CLIENT_SECRET is EMPTY"; else echo "✅ CLIENT_SECRET has value"; fi
-          if [ -z "${{ secrets.AZURE_TENANT_ID }}" ]; then echo "❌ TENANT_ID is EMPTY"; else echo "✅ TENANT_ID has value"; fi
-          databricks version
+          echo "Comprobando carga de secretos..."
+          echo "HOST: ${VAR_HOST} caracteres"
+          echo "ID: ${VAR_ID} caracteres"
+          echo "SECRET: ${VAR_SECRET} caracteres"
+          echo "TENANT: ${VAR_TENANT} caracteres"
+        env:
+          VAR_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          VAR_ID: ${{ secrets.AZURE_SP_CLIENT_ID_DEV }}
+          VAR_SECRET: ${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}
+          VAR_TENANT: ${{ secrets.AZURE_TENANT_ID }}
 
       - name: Extract from DEV
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
           DATABRICKS_CLIENT_ID: ${{ secrets.AZURE_SP_CLIENT_ID_DEV }}
           DATABRICKS_CLIENT_SECRET: ${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}
-          DATABRICKS_AZURE_TENANT_ID: ${{ env.AZURE_TENANT_ID }}
+          DATABRICKS_AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           DATABRICKS_AUTH_TYPE: azure-client-secret
         run: |
           databricks auth describe
