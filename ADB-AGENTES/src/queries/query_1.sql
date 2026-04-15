@@ -1,1 +1,0 @@
-SELECT count(*) FROM main_dev.default.ma_table_scores WHERE value < 50
