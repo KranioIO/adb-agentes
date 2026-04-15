@@ -60,6 +60,25 @@ jobs:
             NAME=$(jq -r '.display_name' "$file")
             echo "🔍 Analyse de l'alerte : $NAME"
             
+            # Limpieza ultra-estricta para asegurar que query_text no esté vacío
+            jq -r --arg WH "$QA_WH" --arg PATH "$QA_PATH" '
+              {
+                "display_name": .display_name,
+                "query_text": .query_text,
+                "warehouse_id": $WH,
+                "parent_path": (if .parent_path == null then $PATH else .parent_path end),
+                "evaluation": .evaluation,
+                "schedule": .schedule
+              } | del(.evaluation.state, .evaluation.last_evaluated_at)
+            ' "$file" > payload.json
+            
+            # Verificación de seguridad antes de enviar
+            QUERY_CHECK=$(jq -r '.query_text' payload.json)
+            if [ "$QUERY_CHECK" == "null" ] || [ -z "$QUERY_CHECK" ]; then
+              echo "❌ ERROR: query_text está vacío en $file. Saltando..."
+              continue
+            fi
+
             # 1. Vérifier si l'alerte existe en QA
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
         
