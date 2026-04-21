@@ -2,7 +2,7 @@
   "create_time":"2026-03-26T19:35:31Z",
   "display_name":"prueba2",
   "effective_run_as": {
-    "user_name":"jeiko@kranio.io"
+    "user_name":"stephane@kranio.io"
   },
   "evaluation": {
     "comparison_operator":"EQUAL",
@@ -34,6 +34,6 @@
     "quartz_cron_schedule":"30 42 16 26 * ?",
     "timezone_id":"America/Santiago"
   },
-  "update_time":"2026-03-27T15:47:19Z",
+  "update_time":"2026-04-15T14:37:37Z",
   "warehouse_id":"af6acdfdf7d45afd"
 }
