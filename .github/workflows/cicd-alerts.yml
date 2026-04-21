@@ -10,73 +10,88 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar Databricks CLI
+      - name: Install Databricks CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-      - name: Extraer Alertas de DEV
+      - name: Extract from DEV
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+          #DATABRICKS_CLIENT_ID: ${{ secrets.AZURE_SP_CLIENT_ID_DEV }}
+          #DATABRICKS_CLIENT_SECRET: ${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}
+          #DATABRICKS_AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
         run: |
-          echo "Conectando a DEV..."
           databricks auth describe
           mkdir -p temp_alerts
-          
-          # Listar y descargar cada alerta individualmente
+          # Extraemos todas las alertas de DEV
           for id in $(databricks alerts-v2 list-alerts -o json | jq -r '.[] | .id'); do
-            echo "Descargando alerta ID: $id"
             databricks alerts-v2 get-alert "$id" -o json > "temp_alerts/alert_$id.json"
           done
 
-      - name: Desplegar Alertas en QA
+      # --- PASO 2: DESPLEGAR EN QA ---
+      - name: Deploy to QA
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_QA }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_QA }}
+          #DATABRICKS_CLIENT_ID: ${{ secrets.AZURE_SP_CLIENT_ID_DEV }}
+          #DATABRICKS_CLIENT_SECRET: ${{ secrets.AZURE_SP_CLIENT_SECRET_DEV }}
+          #DATABRICKS_AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          #DATABRICKS_AUTH_TYPE: azure-client-secret
         run: |
-          # Configuraciones de destino en QA
           QA_WH="af6acdfdf7d45afd"
-          QA_PATH="/Shared/Alerts"
-          DEFAULT_COLUMN="value" # Columna por defecto si source.name viene vacío
-
+          QA_PATH="/Shared/Alerts" # Destination souhaitée pour les nouvelles alertes
+        
           for file in temp_alerts/*.json; do
             NAME=$(jq -r '.display_name' "$file")
-            echo "------------------------------------------------------"
-            echo "🔍 Procesando alerta: $NAME"
+            echo "🔍 Analyse de l'alerte : $NAME"
             
-            # 1. PRE-PROCESAMIENTO: Extraer columna del SQL si source.name es nulo/vacío
-            # Intentamos sacar la última palabra antes del FROM en el SQL
-            QUERY_TEXT=$(jq -r '.query_text' "$file")
-            FALLBACK_COL=$(echo "$QUERY_TEXT" | grep -iP -o '(\w+)(?=\s+FROM)' | tail -n 1 || echo "$DEFAULT_COLUMN")
+            # 1. Reconstrucción total del objeto para cumplir con el esquema v2
+            jq --arg WH "$QA_WH" --arg PATH "$QA_PATH" --arg DEF_COL "$DEFAULT_COLUMN" '
+            {
+              "display_name": .display_name,
+              "query_text": (.query_text // ""), 
+              "warehouse_id": $WH,
+              "parent_path": $PATH,
+              "evaluation": {
+                "comparison_operator": .evaluation.comparison_operator,
+                "threshold": .evaluation.threshold,
+                "source": {
+                  # Si .evaluation.source.name no existe o es vacío, usa $DEF_COL
+                  "name": (.evaluation.source.name | select(. != null and . != "") // $DEF_COL)
+                }
+              },
+              "schedule": .schedule
+            } | del(.. | nulls)
+            ' "$file" > payload.json
 
-            # 2. BUSCAR SI YA EXISTE EN QA (por nombre)
+            # 2. Validación rápida
+            if [ "$(jq -r '.evaluation.source.name' payload.json)" == "" ]; then
+                echo "⚠️ Error crítico: No se pudo asignar un nombre de columna a $NAME"
+                continue
+            fi
+            # 1. Vérifier si l'alerte existe en QA
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
-
+        
             if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
-              echo "🆕 Estado: No existe en QA. Iniciando MODO CREACIÓN..."
-              
-              # Transformación para CREAR (incluye parent_path)
-              jq --arg WH "$QA_WH" --arg PATH "$QA_PATH" --arg FALLBACK "$FALLBACK_COL" '
-                del(.id, .create_time, .update_time, .owner_user_name, .effective_run_as, .evaluation.state, .evaluation.last_evaluated_at) | 
-                .warehouse_id = (if .warehouse_id == "" or .warehouse_id == null then $WH else .warehouse_id end) | 
-                .parent_path = $PATH |
-                .query_text |= gsub("main_dev"; "main_qa") |
-                .evaluation.source.name |= (select(. != null and . != "") // $FALLBACK)
-              ' "$file" > payload.json
+              echo "🆕 Mode CRÉATION"
+              # On garde le parent_path pour définir l'endroit initial
+              jq --arg WH "$QA_WH" --arg PATH "$QA_PATH" \
+                'del(.id, .create_time, .update_time, .owner_user_name, .effective_run_as, .evaluation.state, .evaluation.last_evaluated_at) | 
+                 .warehouse_id = $WH | .parent_path = $PATH |
+                 .query_text |= gsub("main_dev"; "main_qa")' "$file" > payload.json
               
               databricks alerts-v2 create-alert --json @payload.json
             else
-              echo "🔄 Estado: Alerta encontrada (ID: $EXISTING_ID). Iniciando MODO ACTUALIZACIÓN..."
+              echo "🔄 Mode MISE À JOUR (ID: $EXISTING_ID)"
+              # On SUPPRIME parent_path du JSON pour éviter l'erreur d'immutabilité
+              jq --arg WH "$QA_WH" \
+                'del(.id, .create_time, .update_time, .owner_user_name, .effective_run_as, .evaluation.state, .evaluation.last_evaluated_at, .parent_path) | 
+                 .warehouse_id = $WH |
+                 .query_text |= gsub("main_dev"; "main_qa")' "$file" > payload.json
               
-              # Transformación para ACTUALIZAR (prohibido enviar parent_path)
-              jq --arg WH "$QA_WH" --arg FALLBACK "$FALLBACK_COL" '
-                del(.id, .create_time, .update_time, .owner_user_name, .effective_run_as, .evaluation.state, .evaluation.last_evaluated_at, .parent_path) | 
-                .warehouse_id = (if .warehouse_id == "" or .warehouse_id == null then $WH else .warehouse_id end) | 
-                .query_text |= gsub("main_dev"; "main_qa") |
-                .evaluation.source.name |= (select(. != null and . != "") // $FALLBACK)
-              ' "$file" > payload.json
-              
-              # Definir la máscara de campos a actualizar
+              # On ajuste la MASK pour ne pas inclure parent_path
               MASK="display_name,query_text,warehouse_id,evaluation,schedule"
               databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload.json
             fi
