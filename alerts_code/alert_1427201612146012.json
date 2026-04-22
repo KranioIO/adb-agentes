@@ -1,0 +1,31 @@
+{
+  "create_time":"2026-04-14T19:37:32Z",
+  "display_name":"Alert 1",
+  "effective_run_as": {
+    "user_name":"stephane@kranio.io"
+  },
+  "evaluation": {
+    "comparison_operator":"GREATER_THAN",
+    "last_evaluated_at":"2026-04-22T06:00:36Z",
+    "source": {
+      "name":"cnt"
+    },
+    "state":"TRIGGERED",
+    "threshold": {
+      "value": {
+        "double_value":1
+      }
+    }
+  },
+  "id":"1427201612146012",
+  "lifecycle_state":"ACTIVE",
+  "owner_user_name":"stephane@kranio.io",
+  "parent_path":"/Workspace/Users/stephane@kranio.io/.bundle/alertas-cicd-bundle/dev/resources",
+  "query_text":"SELECT count(*) AS cnt FROM main_dev.default.ma_table_scores WHERE value \u003c 50",
+  "schedule": {
+    "quartz_cron_schedule":"0 0 0 ? * Wed",
+    "timezone_id":"America/Mexico_City"
+  },
+  "update_time":"2026-04-15T20:22:41Z",
+  "warehouse_id":"af6acdfdf7d45afd"
+}
