@@ -23,6 +23,7 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
         run: |
+          rm -rf alerts_code/
           mkdir -p alerts_code/
           for id in $(databricks alerts-v2 list-alerts -o json | jq -r '.[] | .id'); do
             databricks alerts-v2 get-alert "$id" -o json > "alerts_code/alert_$id.json"
@@ -120,4 +121,3 @@ jobs:
               databricks alerts-v2 update-alert "$EXISTING_ID" "display_name,query_text,warehouse_id,evaluation,schedule" --json @update_payload.json
             fi
           done
-          
