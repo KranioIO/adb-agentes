@@ -1,0 +1,31 @@
+{
+  "create_time":"2026-03-27T19:32:22Z",
+  "display_name":"[dev jeiko] prueba2",
+  "effective_run_as": {
+    "user_name":"stephane@kranio.io"
+  },
+  "evaluation": {
+    "comparison_operator":"EQUAL",
+    "source": {
+      "display":"mensaje_prueba",
+      "name":"mensaje_prueba"
+    },
+    "threshold": {
+      "value": {
+        "string_value":"Hola desde el Bundle"
+      }
+    }
+  },
+  "id":"1446032536979662",
+  "lifecycle_state":"ACTIVE",
+  "owner_user_name":"jeiko@kranio.io",
+  "parent_path":"/Workspace/Users/jeiko@kranio.io/.bundle/new_bundle/dev/resources",
+  "query_text":"SELECT 'Hola desde el Bundle' AS mensaje_prueba;\n",
+  "schedule": {
+    "pause_status":"PAUSED",
+    "quartz_cron_schedule":"30 42 16 26 * ?",
+    "timezone_id":"America/Santiago"
+  },
+  "update_time":"2026-04-15T14:37:17Z",
+  "warehouse_id":"af6acdfdf7d45afd"
+}
