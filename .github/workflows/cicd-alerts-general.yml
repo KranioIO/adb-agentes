@@ -82,7 +82,7 @@ jobs:
             fi
             [ -z "$FALLBACK_COL" ] && FALLBACK_COL="cnt"
 
-            # 3. Transformación con JQ: Forzamos que source.name nunca sea ""
+            # 3. Transformación con JQ: Forzamos validación de source.name y schedule
             jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" \
                --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" \
                --arg FALLBACK "$FALLBACK_COL" '
@@ -95,11 +95,11 @@ jobs:
                 "comparison_operator": .evaluation.comparison_operator,
                 "threshold": .evaluation.threshold,
                 "source": {
-                  # Si .name es nulo, vacío o no existe, inyectamos el Fallback
                   "name": (if .evaluation.source.name == null or .evaluation.source.name == "" then $FALLBACK else .evaluation.source.name end)
                 }
               },
-              "schedule": .schedule
+              # Validamos el schedule: si no tiene cron, lo eliminamos para evitar errores
+              "schedule": (if .schedule.quartz_cron_schedule == null or .schedule.quartz_cron_schedule == "" then null else .schedule end)
             } | del(.. | nulls)
             ' "$file" > payload.json
 
