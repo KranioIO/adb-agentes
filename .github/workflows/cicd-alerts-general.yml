@@ -82,7 +82,7 @@ jobs:
             fi
             [ -z "$FALLBACK_COL" ] && FALLBACK_COL="cnt"
 
-            # 3. Transformación con JQ: Forzamos validación de source.name y schedule
+            # 3. Transformación con JQ: Limpieza profunda de Schedule y Source
             jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" \
                --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" \
                --arg FALLBACK "$FALLBACK_COL" '
@@ -97,10 +97,14 @@ jobs:
                 "source": {
                   "name": (if .evaluation.source.name == null or .evaluation.source.name == "" then $FALLBACK else .evaluation.source.name end)
                 }
-              },
-              # Validamos el schedule: si no tiene cron, lo eliminamos para evitar errores
-              "schedule": (if .schedule.quartz_cron_schedule == null or .schedule.quartz_cron_schedule == "" then null else .schedule end)
-            } | del(.. | nulls)
+              }
+            } + (
+              # Solo añadimos el objeto schedule si tiene un cron válido (no vacío)
+              if .schedule.quartz_cron_schedule != null and .schedule.quartz_cron_schedule != "" 
+              then { "schedule": .schedule } 
+              else {} 
+              end
+            ) | del(.. | nulls)
             ' "$file" > payload.json
 
             # 4. Verificar existencia e Idempotencia
