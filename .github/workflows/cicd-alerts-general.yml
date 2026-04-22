@@ -1,0 +1,100 @@
+name: CI/CD Databricks Alerts Professional Flow
+
+on:
+  push:
+    branches:
+      - development
+      - release
+      - main
+
+jobs:
+  # --- JOB 1: EXTRAER DESDE DEV (Solo si estamos en la rama development) ---
+  extract:
+    if: github.ref == 'refs/heads/development'
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Databricks CLI
+        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Extract from DEV
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+        run: |
+          mkdir -p alerts_code/
+          for id in $(databricks alerts-v2 list-alerts -o json | jq -r '.[] | .id'); do
+            databricks alerts-v2 get-alert "$id" -o json > "alerts_code/alert_$id.json"
+          done
+
+      - name: Commit & Push Alerts to Git
+        run: |
+          git config --global user.name "Service Principal"
+          git config --global user.email "sp@databricks.com"
+          git add alerts_code/*.json
+          git commit -m "docs: Sync alerts from DEV [skip ci]" || echo "No changes"
+          git push
+
+  # --- JOB 2: DESPLEGAR (A QA o PRD según la rama) ---
+  deploy:
+    if: github.ref == 'refs/heads/release' || github.ref == 'refs/heads/main'
+    needs: [] # No necesita el job de extract porque lee los archivos ya commiteados en la rama
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'prd' || 'qa' }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Databricks CLI
+        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Deploy to Target Environment
+        env:
+          DATABRICKS_HOST: ${{ github.ref == 'refs/heads/main' && secrets.DATABRICKS_HOST_PRD || secrets.DATABRICKS_HOST_QA }}
+          DATABRICKS_TOKEN: ${{ github.ref == 'refs/heads/main' && secrets.DATABRICKS_TOKEN_PRD || secrets.DATABRICKS_TOKEN_QA }}
+          TARGET_WH: ${{ vars.WAREHOUSE_ID }}
+          TARGET_PATH: ${{ vars.ALERTS_PATH }}
+          TARGET_CATALOG: ${{ vars.CATALOG_NAME }}
+          SOURCE_CATALOG: "main_dev" # Siempre es nuestra base en el código
+          DEFAULT_COLUMN: "cnt"
+        run: |
+          # Solo procesamos si la carpeta existe
+          if [ ! -d "alerts_code" ]; then echo "No alerts to deploy"; exit 0; fi
+
+          for file in alerts_code/*.json; do
+            NAME=$(jq -r '.display_name' "$file")
+            echo "🔍 Procesando: $NAME en entorno ${{ vars.CATALOG_NAME }}"
+
+            # Transformación con JQ (Idéntica a la anterior, pero usando variables de entorno)
+            QUERY_TEXT=$(jq -r '.query_text' "$file")
+            FALLBACK_COL=$(echo "$QUERY_TEXT" | grep -iP -o '(\w+)(?=\s+FROM)' | tail -n 1 || echo "$DEFAULT_COLUMN")
+
+            jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" \
+               --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" \
+               --arg FALLBACK "$FALLBACK_COL" '
+            {
+              "display_name": .display_name,
+              "query_text": (.query_text | gsub($S_CAT; $T_CAT) // ""), 
+              "warehouse_id": $WH,
+              "parent_path": $PATH,
+              "evaluation": {
+                "comparison_operator": .evaluation.comparison_operator,
+                "threshold": .evaluation.threshold,
+                "source": {
+                  "name": (.evaluation.source.name | select(. != null and . != "") // $FALLBACK)
+                }
+              },
+              "schedule": .schedule
+            } | del(.. | nulls)
+            ' "$file" > payload.json
+
+            # Sincronización (Idempotencia)
+            EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
+
+            if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
+              databricks alerts-v2 create-alert --json @payload.json
+            else
+              jq 'del(.parent_path)' payload.json > update_payload.json
+              databricks alerts-v2 update-alert "$EXISTING_ID" "display_name,query_text,warehouse_id,evaluation,schedule" --json @update_payload.json
+            fi
+          done

@@ -71,12 +71,12 @@ jobs:
                 echo "⚠️ Error crítico: No se pudo asignar un nombre de columna a $NAME"
                 continue
             fi
-            # 1. Vérifier si l'alerte existe en QA
+            # 3. Verificar si la alerta ya existe en QA para decidir si CREAR o ACTUALIZAR
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
         
             if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
-              echo "🆕 Mode CRÉATION"
-              # On garde le parent_path pour définir l'endroit initial
+              echo "🆕 Modo CREACIÓN"
+              # Para crear, mantenemos el parent_path para definir la ubicación inicial
               jq --arg WH "$QA_WH" --arg PATH "$QA_PATH" \
                 'del(.id, .create_time, .update_time, .owner_user_name, .effective_run_as, .evaluation.state, .evaluation.last_evaluated_at) | 
                  .warehouse_id = $WH | .parent_path = $PATH |
@@ -84,14 +84,14 @@ jobs:
               
               databricks alerts-v2 create-alert --json @payload.json
             else
-              echo "🔄 Mode MISE À JOUR (ID: $EXISTING_ID)"
-              # On SUPPRIME parent_path du JSON pour éviter l'erreur d'immutabilité
+              echo "🔄 Modo ACTUALIZACIÓN (ID: $EXISTING_ID)"
+              # Para actualizar, ELIMINAMOS parent_path para evitar el error de "path inmutable"
               jq --arg WH "$QA_WH" \
                 'del(.id, .create_time, .update_time, .owner_user_name, .effective_run_as, .evaluation.state, .evaluation.last_evaluated_at, .parent_path) | 
                  .warehouse_id = $WH |
                  .query_text |= gsub("main_dev"; "main_qa")' "$file" > payload.json
               
-              # On ajuste la MASK pour ne pas inclure parent_path
+              # Definimos la máscara para indicarle a Databricks qué campos sobreescribir
               MASK="display_name,query_text,warehouse_id,evaluation,schedule"
               databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload.json
             fi
