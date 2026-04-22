@@ -1,0 +1,21 @@
+resources:
+  jobs:
+    job_965662841561686:
+      name: Job_Entrenamiento_Demo
+      tasks:
+        - task_key: Entrenamiento_Principal
+          email_notifications: {}
+          notebook_task:
+            notebook_path: ../../src/entrenamiento_modelo.py
+            source: WORKSPACE
+          run_if: ALL_SUCCESS
+      deployment:
+        kind: BUNDLE
+        metadata_file_path: /Workspace/Shared/projet-test-2/qa/state/metadata.json
+      edit_mode: UI_LOCKED
+      email_notifications: {}
+      max_concurrent_runs: 1
+      performance_target: PERFORMANCE_OPTIMIZED
+      queue:
+        enabled: true
+      webhook_notifications: {}

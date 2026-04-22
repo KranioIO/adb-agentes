@@ -1,0 +1,27 @@
+{
+  "create_time":"2026-02-03T14:09:35Z",
+  "display_name":"New Alert 2026-02-03 9:09am",
+  "effective_run_as": {
+    "user_name":"stephane@kranio.io"
+  },
+  "evaluation": {
+    "comparison_operator":"EQUAL",
+    "notification": {
+      "notify_on_ok":false
+    },
+    "source": {
+      "name":""
+    }
+  },
+  "id":"2420996969173938",
+  "lifecycle_state":"ACTIVE",
+  "owner_user_name":"stephane@kranio.io",
+  "parent_path":"/Workspace/Users/stephane@kranio.io",
+  "query_text":"WITH rounded_data AS (\n  SELECT\n    DATE_TRUNC('HOUR', event_time) AS evaluated_at,\n    CONCAT(catalog_name, '.', schema_name, '.', table_name) AS full_table_name,\n    status,\n    MAX(downstream_impact.num_queries_on_affected_tables) AS impacted_queries,\n    MAX(freshness.commit_freshness.predicted_value) AS commit_expected,\n    MAX(freshness.commit_freshness.last_value) AS commit_actual,\n    MAX(completeness.daily_row_count.min_predicted_value) AS completeness_expected,\n    MAX(completeness.daily_row_count.last_value) AS completeness_actual\n  FROM system.data_quality_monitoring.table_results\n  GROUP BY ALL\n)\nSELECT\n  evaluated_at,\n  full_table_name,\n  status,\n  commit_expected,\n  commit_actual,\n  completeness_expected,\n  completeness_actual,\n  impacted_queries\nFROM rounded_data\nWHERE\n  evaluated_at \u003e= current_timestamp() - INTERVAL 6 HOURS\n  AND impacted_queries \u003e 5\n  AND status = 'Unhealthy';",
+  "schedule": {
+    "quartz_cron_schedule":"",
+    "timezone_id":""
+  },
+  "update_time":"2026-03-10T13:37:23Z",
+  "warehouse_id":""
+}

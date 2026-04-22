@@ -1,0 +1,16 @@
+{
+  "apply_auto_limit":true,
+  "catalog":"hive_metastore",
+  "create_time":"2026-04-10T15:51:35Z",
+  "display_name":"Query 1",
+  "id":"171d51f0-2a6f-4bc5-809e-8e3207508768",
+  "last_modifier_user_name":"stephane@kranio.io",
+  "lifecycle_state":"ACTIVE",
+  "owner_user_name":"stephane@kranio.io",
+  "parent_path":"/Workspace/Users/stephane@kranio.io",
+  "query_text":"SELECT count(*) FROM main_dev.default.ma_table_scores WHERE value \u003c 50",
+  "run_as_mode":"OWNER",
+  "schema":"default",
+  "update_time":"2026-04-10T16:13:09Z",
+  "warehouse_id":"af6acdfdf7d45afd"
+}
