@@ -1,0 +1,24 @@
+{
+  "create_time":"2026-03-30T15:33:40Z",
+  "display_name":"New Alert 2026-03-30 12_33_40",
+  "effective_run_as": {
+    "user_name":"jeiko@kranio.io"
+  },
+  "evaluation": {
+    "comparison_operator":"EQUAL",
+    "source": {
+      "name":""
+    }
+  },
+  "id":"3078609288822859",
+  "lifecycle_state":"ACTIVE",
+  "owner_user_name":"jeiko@kranio.io",
+  "parent_path":"/Workspace/Users/jeiko@kranio.io/test-bundle-con-action/new_bundle/src",
+  "query_text":"",
+  "schedule": {
+    "quartz_cron_schedule":"",
+    "timezone_id":""
+  },
+  "update_time":"2026-03-30T15:35:16Z",
+  "warehouse_id":""
+}

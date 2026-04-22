@@ -1,0 +1,24 @@
+{
+  "create_time":"2026-03-30T15:29:52Z",
+  "display_name":"hola_mundo",
+  "effective_run_as": {
+    "user_name":"jeiko@kranio.io"
+  },
+  "evaluation": {
+    "comparison_operator":"EQUAL",
+    "source": {
+      "name":""
+    }
+  },
+  "id":"3078609288822858",
+  "lifecycle_state":"ACTIVE",
+  "owner_user_name":"jeiko@kranio.io",
+  "parent_path":"/Workspace/Users/jeiko@kranio.io/test-bundle-con-action/new_bundle/src",
+  "query_text":"SELECT 'hola mundo';",
+  "schedule": {
+    "quartz_cron_schedule":"",
+    "timezone_id":""
+  },
+  "update_time":"2026-03-30T15:35:01Z",
+  "warehouse_id":""
+}
