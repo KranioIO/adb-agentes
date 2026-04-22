@@ -62,12 +62,21 @@ jobs:
           if [ ! -d "alerts_code" ]; then echo "No alerts to deploy"; exit 0; fi
 
           for file in alerts_code/*.json; do
+            # Extraer campos base del archivo original
             NAME=$(jq -r '.display_name' "$file")
+            RAW_QUERY=$(jq -r '.query_text // ""' "$file")
+
             echo "🔍 Procesando: $NAME en entorno ${{ vars.CATALOG_NAME }}"
 
-            # Transformación con JQ (Idéntica a la anterior, pero usando variables de entorno)
-            QUERY_TEXT=$(jq -r '.query_text' "$file")
-            FALLBACK_COL=$(echo "$QUERY_TEXT" | grep -iP -o '(\w+)(?=\s+FROM)' | tail -n 1 || echo "$DEFAULT_COLUMN")
+            # VALIDACIÓN: Si la query está vacía en el origen, saltamos para que no rompa el pipeline
+            if [ -z "$RAW_QUERY" ]; then
+              echo "⚠️ Saltando $NAME: No se encontró query_text en el archivo original."
+              continue
+            fi
+
+            # 1. Transformación con JQ
+            # Extraemos columna SQL por si source.name está vacío
+            FALLBACK_COL=$(echo "$RAW_QUERY" | grep -iP -o '(\w+)(?=\s+FROM)' | tail -n 1 || echo "$DEFAULT_COLUMN")
 
             jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" \
                --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" \
@@ -88,12 +97,14 @@ jobs:
             } | del(.. | nulls)
             ' "$file" > payload.json
 
-            # Sincronización (Idempotencia)
+            # 2. Verificar existencia e Idempotencia
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
 
             if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
+              echo "🆕 Creando..."
               databricks alerts-v2 create-alert --json @payload.json
             else
+              echo "🔄 Actualizando ID: $EXISTING_ID"
               jq 'del(.parent_path)' payload.json > update_payload.json
               databricks alerts-v2 update-alert "$EXISTING_ID" "display_name,query_text,warehouse_id,evaluation,schedule" --json @update_payload.json
             fi
