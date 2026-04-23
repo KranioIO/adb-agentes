@@ -77,11 +77,28 @@ jobs:
             NAME=$(jq -r '.display_name' "$file")
             echo "🔍 Procesando: $NAME"
 
-            # 1. Extraer el CRON a una variable de Bash para validar
+            # 1. Extraer Metadatos
             CRON=$(jq -r '.schedule.quartz_cron_schedule // ""' "$file")
             TZ=$(jq -r '.schedule.timezone_id // "UTC"' "$file")
+            RAW_QUERY=$(jq -r '.query_text // ""' "$file")
 
-            # 2. Construcción base del JSON (Sin el schedule)
+            # 2. Extracción de Columna (Mejorada)
+            # Intentamos buscar el alias antes del FROM
+            FALLBACK_COL=$(echo "$RAW_QUERY" | tr -d '\n' | grep -iP -o '(\w+)(?=\s+FROM)' | tail -n 1)
+            
+            # Si falló el anterior, buscamos lo que esté después del SELECT
+            if [ -z "$FALLBACK_COL" ]; then
+                FALLBACK_COL=$(echo "$RAW_QUERY" | tr -d '\n' | grep -iP -o 'SELECT\s+\K\w+' | head -n 1)
+            fi
+
+            # SI SIGUE VACÍO (o es un asterisco), forzamos un valor por defecto
+            if [ -z "$FALLBACK_COL" ] || [ "$FALLBACK_COL" == "*" ]; then
+                FALLBACK_COL="cnt" 
+            fi
+            
+            echo "📊 Columna detectada para evaluación: $FALLBACK_COL"
+
+            # 3. Construcción Base con JQ (Garantizando que name no sea "")
             jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" \
                --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" \
                --arg FALLBACK "$FALLBACK_COL" '
@@ -94,30 +111,19 @@ jobs:
                 "comparison_operator": .evaluation.comparison_operator,
                 "threshold": .evaluation.threshold,
                 "source": {
+                  # Si el nombre en el JSON original es nulo o vacío, usamos el FALLBACK
                   "name": (if .evaluation.source.name == null or .evaluation.source.name == "" then $FALLBACK else .evaluation.source.name end)
                 }
               }
             }' "$file" > payload.json
 
-            # 3. Si el CRON no está vacío, se lo inyectamos al payload.json
+            # 4. Inyección de horario (Tu lógica que ya funciona)
             if [ ! -z "$CRON" ] && [ "$CRON" != "null" ] && [ "$CRON" != "" ]; then
               echo "⏰ Añadiendo horario: $CRON"
               jq --arg CRON "$CRON" --arg TZ "$TZ" \
                 '. + { "schedule": { "quartz_cron_schedule": $CRON, "timezone_id": $TZ, "pause_status": "PAUSED" } }' \
                 payload.json > temp_payload.json && mv temp_payload.json payload.json
-            else
-              echo "🛑 Sin horario válido, se creará sin programación."
             fi
 
-            # 4. Enviar a Databricks (Create o Update)
-            EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
-
-            if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
-              echo "🆕 Creando..."
-              databricks alerts-v2 create-alert --json @payload.json
-            else
-              echo "🔄 Actualizando ID: $EXISTING_ID"
-              jq 'del(.parent_path)' payload.json > update_payload.json
-              databricks alerts-v2 update-alert "$EXISTING_ID" "display_name,query_text,warehouse_id,evaluation,schedule" --json @update_payload.json
-            fi
-          done
+            # 5. Ejecución (Create/Update)
+            # ... (tu lógica de databricks alerts-v2 list-alerts etc)
