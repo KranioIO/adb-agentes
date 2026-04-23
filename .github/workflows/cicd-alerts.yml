@@ -43,56 +43,44 @@ jobs:
           QA_WH="af6acdfdf7d45afd"
           QA_PATH="/Shared/Alerts" # Destination souhaitée pour les nouvelles alertes
         
-          for file in temp_alerts/*.json; do
+          for file in alerts_code/*.json; do
             NAME=$(jq -r '.display_name' "$file")
-            echo "🔍 Analyse de l'alerte : $NAME"
-            
-            # 1. Reconstrucción total del objeto para cumplir con el esquema v2
+            echo "🔍 Analizando: $NAME"
+
+            # --- PASO A: Limpieza inicial (Esta es tu base sólida) ---
+            # Aquí arreglamos el source.name y el schedule vacío
             jq --arg WH "$QA_WH" --arg PATH "$QA_PATH" --arg DEF_COL "$DEFAULT_COLUMN" '
             {
               "display_name": .display_name,
-              "query_text": (.query_text // ""), 
+              "query_text": (.query_text | gsub("main_dev"; "main_qa") // ""), 
               "warehouse_id": $WH,
               "parent_path": $PATH,
               "evaluation": {
                 "comparison_operator": .evaluation.comparison_operator,
                 "threshold": .evaluation.threshold,
                 "source": {
-                  # Si .evaluation.source.name no existe o es vacío, usa $DEF_COL
-                  "name": (.evaluation.source.name | select(. != null and . != "") // $DEF_COL)
+                  "name": (if .evaluation.source.name == null or .evaluation.source.name == "" then $DEF_COL else .evaluation.source.name end)
                 }
               },
-              "schedule": .schedule
+              # Solo incluimos schedule si tiene un cron válido
+              "schedule": (if .schedule.quartz_cron_schedule != null and .schedule.quartz_cron_schedule != "" then .schedule else null end)
             } | del(.. | nulls)
-            ' "$file" > payload.json
+            ' "$file" > payload_limpio.json
 
-            # 2. Validación rápida
-            if [ "$(jq -r '.evaluation.source.name' payload.json)" == "" ]; then
-                echo "⚠️ Error crítico: No se pudo asignar un nombre de columna a $NAME"
-                continue
-            fi
-            # 3. Verificar si la alerta ya existe en QA para decidir si CREAR o ACTUALIZAR
+            # --- PASO B: Decidir si Crear o Actualizar usando el JSON LIMPIO ---
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
         
             if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
               echo "🆕 Modo CREACIÓN"
-              # Para crear, mantenemos el parent_path para definir la ubicación inicial
-              jq --arg WH "$QA_WH" --arg PATH "$QA_PATH" \
-                'del(.id, .create_time, .update_time, .owner_user_name, .effective_run_as, .evaluation.state, .evaluation.last_evaluated_at) | 
-                 .warehouse_id = $WH | .parent_path = $PATH |
-                 .query_text |= gsub("main_dev"; "main_qa")' "$file" > payload.json
-              
-              databricks alerts-v2 create-alert --json @payload.json
+              # USAMOS payload_limpio.json directamente
+              databricks alerts-v2 create-alert --json @payload_limpio.json
             else
               echo "🔄 Modo ACTUALIZACIÓN (ID: $EXISTING_ID)"
-              # Para actualizar, ELIMINAMOS parent_path para evitar el error de "path inmutable"
-              jq --arg WH "$QA_WH" \
-                'del(.id, .create_time, .update_time, .owner_user_name, .effective_run_as, .evaluation.state, .evaluation.last_evaluated_at, .parent_path) | 
-                 .warehouse_id = $WH |
-                 .query_text |= gsub("main_dev"; "main_qa")' "$file" > payload.json
+              # Quitamos el parent_path del payload_limpio porque no se puede actualizar
+              jq 'del(.parent_path)' payload_limpio.json > payload_update.json
               
-              # Definimos la máscara para indicarle a Databricks qué campos sobreescribir
               MASK="display_name,query_text,warehouse_id,evaluation,schedule"
-              databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload.json
+              databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload_update.json
             fi
           done
+          
