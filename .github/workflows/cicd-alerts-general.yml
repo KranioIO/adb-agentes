@@ -15,6 +15,9 @@ jobs:
     environment: development
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
@@ -33,9 +36,17 @@ jobs:
         run: |
           git config --global user.name "Service Principal"
           git config --global user.email "sp@databricks.com"
-          git add alerts_code/*.json
-          git commit -m "docs: Sync alerts from DEV [skip ci]" || echo "No changes"
-          git push
+          
+          # CAMBIO AQUÍ: Usar -A para capturar los borrados
+          git add -A alerts_code/
+          
+          # Usamos un if para evitar errores si no hay absolutamente ningún cambio
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "sync: Sync alerts from DEV (including deletions) [skip ci]"
+            git push
+          fi
 
   # --- JOB 2: DESPLEGAR (A QA o PRD según la rama) ---
   deploy:
