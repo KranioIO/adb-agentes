@@ -96,32 +96,42 @@ jobs:
             
             echo "📊 Columna detectada: $FALLBACK_COL"
           
-            # 3. Construcción Base (Estructura Blindada para Threshold)
-            jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" \
-               --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" \
-               --arg FALLBACK "$FALLBACK_COL" '
+            # 3. Transformación de Query y Construcción Base
+            # Extraemos la query, aplicamos el cambio de catálogo y la limpiamos
+            FINAL_QUERY=$(jq -r '.query_text' "$file" | sed "s/$SOURCE_CATALOG/$TARGET_CATALOG/g")
+            
+            # Si por algún motivo la query queda vacía, la rescatamos del archivo original directamente
+            if [ -z "$FINAL_QUERY" ] || [ "$FINAL_QUERY" == "null" ]; then
+                FINAL_QUERY=$(jq -r '.query_text' "$file")
+            fi
+
+            jq -n \
+               --arg NAME "$NAME" \
+               --arg QUERY "$FINAL_QUERY" \
+               --arg WH "$TARGET_WH" \
+               --arg PATH "$TARGET_PATH" \
+               --arg OP "$(jq -r '.evaluation.comparison_operator' "$file")" \
+               --arg COL "$FALLBACK_COL" \
+               --argjson ORIG_THRESH "$(jq '.evaluation.threshold' "$file")" \
+            '
             {
-              "display_name": .display_name,
-              "query_text": (.query_text | gsub($S_CAT; $T_CAT) // ""), 
+              "display_name": $NAME,
+              "query_text": $QUERY,
               "warehouse_id": $WH,
               "parent_path": $PATH,
               "evaluation": {
-                "comparison_operator": .evaluation.comparison_operator,
-                # Forzamos la estructura de threshold.value
+                "comparison_operator": $OP,
+                "source": { "name": $COL },
                 "threshold": {
                   "value": (
-                    if .evaluation.threshold.value.double_value != null then { "double_value": (.evaluation.threshold.value.double_value | tonumber) }
-                    elif .evaluation.threshold.value.string_value != null then { "string_value": .evaluation.threshold.value.string_value }
-                    # Si todo falla pero el operador requiere valor, ponemos 0 por seguridad
+                    if $ORIG_THRESH.value.double_value != null then { "double_value": ($ORIG_THRESH.value.double_value | tonumber) }
+                    elif $ORIG_THRESH.value.string_value != null then { "string_value": $ORIG_THRESH.value.string_value }
                     else { "double_value": 0 }
                     end
                   )
-                },
-                "source": {
-                  "name": (if .evaluation.source.name == null or .evaluation.source.name == "" then $FALLBACK else .evaluation.source.name end)
                 }
               }
-            }' "$file" > payload.json
+            }' > payload.json
           
             # 4. Horario
             if [ ! -z "$CRON" ] && [ "$CRON" != "null" ] && [ "$CRON" != "" ]; then
