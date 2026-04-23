@@ -74,58 +74,39 @@ jobs:
           
           for file in alerts_code/*.json; do
             NAME=$(jq -r '.display_name' "$file")
-            echo "-------------------------------------------------------"
-            echo "🔍 PROCESANDO: $NAME"
-          
-            # 1. Extracción de datos con valores por defecto
-            CRON=$(jq -r '.schedule.quartz_cron_schedule // empty' "$file")
-            TZ=$(jq -r '.schedule.timezone_id // "UTC"' "$file")
-            RAW_QUERY=$(jq -r '.query_text // empty' "$file")
-            
-            # 2. Fallback de columna
-            FALLBACK_COL=$(echo "$RAW_QUERY" | tr -d '\n' | grep -iP -o '(\w+)(?=\s+FROM)' | tail -n 1)
-            [ -z "$FALLBACK_COL" ] && FALLBACK_COL="$DEFAULT_COLUMN"
+            echo "🔍 Analizando: $NAME"
 
-            # 3. Construcción del Payload
-            jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" --arg COL "$FALLBACK_COL" '
+            # 1. Limpieza inicial (Basada en tu código funcional)
+            jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" --arg DEF_COL "$DEFAULT_COLUMN" --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" '
             {
               "display_name": .display_name,
-              "query_text": (.query_text | gsub($S_CAT; $T_CAT)), 
+              "query_text": (.query_text | gsub($S_CAT; $T_CAT) // ""), 
               "warehouse_id": $WH,
               "parent_path": $PATH,
               "evaluation": {
                 "comparison_operator": .evaluation.comparison_operator,
-                "source": { "name": (if .evaluation.source.name == null or .evaluation.source.name == "" then $COL else .evaluation.source.name end) },
-                "threshold": {
-                  "value": (
-                    if .evaluation.threshold.value.double_value != null then { "double_value": (.evaluation.threshold.value.double_value | tonumber) }
-                    elif .evaluation.threshold.value.string_value != null then { "string_value": .evaluation.threshold.value.string_value }
-                    else { "double_value": 0 }
-                    end
-                  )
+                "threshold": .evaluation.threshold, # <--- Volvemos a pasarlo tal cual (Lo que funcionaba)
+                "source": {
+                  "name": (if .evaluation.source.name == null or .evaluation.source.name == "" then $DEF_COL else .evaluation.source.name end)
                 }
-              }
-            }' "$file" > payload.json
+              },
+              # Usamos tu lógica de schedule que funcionaba
+              "schedule": (if .schedule.quartz_cron_schedule != null and .schedule.quartz_cron_schedule != "" then .schedule else null end)
+            } | del(.. | nulls)
+            ' "$file" > payload_limpio.json
 
-            # 4. Inyección de Schedule (Seguro)
-            if [ ! -z "$CRON" ] && [ "$CRON" != "null" ]; then
-              jq --arg CRON "$CRON" --arg TZ "$TZ" '. + { "schedule": { "quartz_cron_schedule": $CRON, "timezone_id": $TZ, "pause_status": "PAUSED" } }' payload.json > temp.json && mv temp.json payload.json
-            fi
-
-            # 5. ESTRATEGIA: Borrado y Creación (Para evitar conflictos de permisos/updates)
+            # 2. Verificar existencia
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
         
-            if [ ! -z "$EXISTING_ID" ] && [ "$EXISTING_ID" != "null" ]; then
-              echo "🗑️ Alerta existente detectada (ID: $EXISTING_ID). Borrando para recrear..."
-              databricks alerts-v2 delete-alert "$EXISTING_ID" || echo "⚠️ No se pudo borrar, intentando continuar..."
+            if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
+              echo "🆕 Modo CREACIÓN"
+              databricks alerts-v2 create-alert --json @payload_limpio.json
+            else
+              echo "🔄 Modo ACTUALIZACIÓN (ID: $EXISTING_ID)"
+              # Quitamos el parent_path para el update
+              jq 'del(.parent_path)' payload_limpio.json > payload_update.json
+              
+              MASK="display_name,query_text,warehouse_id,evaluation,schedule"
+              databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload_update.json
             fi
-
-            echo "🆕 Creando alerta: $NAME"
-            # Usamos el payload completo (incluyendo parent_path)
-            databricks alerts-v2 create-alert --json @payload.json || { 
-              echo "❌ FALLO CRÍTICO: La API rechazó la creación."
-              cat payload.json
-              exit 1 
-            }
-            echo "✅ $NAME desplegada con éxito."
           done
