@@ -120,8 +120,19 @@ jobs:
               databricks alerts-v2 create-alert --json @payload.json || { echo "❌ ERROR API en CREACIÓN de $NAME"; cat payload.json; exit 1; }
             else
               echo "🔄 Intentando ACTUALIZAR ID: $EXISTING_ID"
+              # Limpieza extrema para el update: 
+              # Quitamos parent_path y display_name (si ya lo tiene el ID)
               jq 'del(.parent_path)' payload.json > update_payload.json
-              databricks alerts-v2 update-alert "$EXISTING_ID" "display_name,query_text,warehouse_id,evaluation,schedule" --json @update_payload.json || { echo "❌ ERROR API en ACTUALIZACIÓN de $NAME"; cat update_payload.json; exit 1; }
+              
+              # Intentamos actualizar solo lo esencial para evitar conflictos de inmutabilidad
+              MASK="query_text,warehouse_id,evaluation,schedule"
+              databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @update_payload.json || { 
+                echo "❌ FALLO CRÍTICO EN API UPDATE"
+                echo "ID: $EXISTING_ID"
+                echo "Payload enviado:"
+                cat update_payload.json
+                exit 1 
+              }
             fi
             
             echo "✅ $NAME procesado correctamente."
