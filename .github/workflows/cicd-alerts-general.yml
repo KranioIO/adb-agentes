@@ -96,7 +96,7 @@ jobs:
             
             echo "📊 Columna detectada: $FALLBACK_COL"
           
-            # 3. Construcción Base
+            # 3. Construcción Base (Estructura Blindada para Threshold)
             jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" \
                --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" \
                --arg FALLBACK "$FALLBACK_COL" '
@@ -107,7 +107,16 @@ jobs:
               "parent_path": $PATH,
               "evaluation": {
                 "comparison_operator": .evaluation.comparison_operator,
-                "threshold": .evaluation.threshold,
+                # Forzamos la estructura de threshold.value
+                "threshold": {
+                  "value": (
+                    if .evaluation.threshold.value.double_value != null then { "double_value": (.evaluation.threshold.value.double_value | tonumber) }
+                    elif .evaluation.threshold.value.string_value != null then { "string_value": .evaluation.threshold.value.string_value }
+                    # Si todo falla pero el operador requiere valor, ponemos 0 por seguridad
+                    else { "double_value": 0 }
+                    end
+                  )
+                },
                 "source": {
                   "name": (if .evaluation.source.name == null or .evaluation.source.name == "" then $FALLBACK else .evaluation.source.name end)
                 }
