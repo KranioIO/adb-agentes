@@ -112,28 +112,20 @@ jobs:
               jq --arg CRON "$CRON" --arg TZ "$TZ" '. + { "schedule": { "quartz_cron_schedule": $CRON, "timezone_id": $TZ, "pause_status": "PAUSED" } }' payload.json > temp.json && mv temp.json payload.json
             fi
 
-            # 5. Envío a Databricks con Captura de Error
+            # 5. ESTRATEGIA: Borrado y Creación (Para evitar conflictos de permisos/updates)
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
         
-            if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
-              echo "🆕 Intentando CREAR..."
-              databricks alerts-v2 create-alert --json @payload.json || { echo "❌ ERROR API en CREACIÓN de $NAME"; cat payload.json; exit 1; }
-            else
-              echo "🔄 Intentando ACTUALIZAR ID: $EXISTING_ID"
-              # Limpieza extrema para el update: 
-              # Quitamos parent_path y display_name (si ya lo tiene el ID)
-              jq 'del(.parent_path)' payload.json > update_payload.json
-              
-              # Intentamos actualizar solo lo esencial para evitar conflictos de inmutabilidad
-              MASK="query_text,warehouse_id,evaluation,schedule"
-              databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @update_payload.json || { 
-                echo "❌ FALLO CRÍTICO EN API UPDATE"
-                echo "ID: $EXISTING_ID"
-                echo "Payload enviado:"
-                cat update_payload.json
-                exit 1 
-              }
+            if [ ! -z "$EXISTING_ID" ] && [ "$EXISTING_ID" != "null" ]; then
+              echo "🗑️ Alerta existente detectada (ID: $EXISTING_ID). Borrando para recrear..."
+              databricks alerts-v2 delete-alert "$EXISTING_ID" || echo "⚠️ No se pudo borrar, intentando continuar..."
             fi
-            
-            echo "✅ $NAME procesado correctamente."
+
+            echo "🆕 Creando alerta: $NAME"
+            # Usamos el payload completo (incluyendo parent_path)
+            databricks alerts-v2 create-alert --json @payload.json || { 
+              echo "❌ FALLO CRÍTICO: La API rechazó la creación."
+              cat payload.json
+              exit 1 
+            }
+            echo "✅ $NAME desplegada con éxito."
           done
