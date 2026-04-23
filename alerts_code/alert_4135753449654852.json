@@ -2,7 +2,7 @@
   "create_time":"2026-03-27T15:13:21Z",
   "display_name":"New Alert 2026-03-27 12:13:21",
   "effective_run_as": {
-    "user_name":"jeiko@kranio.io"
+    "user_name":"stephane@kranio.io"
   },
   "evaluation": {
     "comparison_operator":"EQUAL",
@@ -16,9 +16,9 @@
   "parent_path":"/Workspace/Users/jeiko@kranio.io/Drafts",
   "query_text":"SELECT 'hola' AS mensaje_prueba",
   "schedule": {
-    "quartz_cron_schedule":"",
-    "timezone_id":""
+    "quartz_cron_schedule":"50 8 10 * * ?",
+    "timezone_id":"America/Bogota"
   },
-  "update_time":"2026-03-27T15:14:36Z",
+  "update_time":"2026-04-23T15:08:54Z",
   "warehouse_id":""
 }
