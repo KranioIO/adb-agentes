@@ -112,7 +112,6 @@ jobs:
             }
             ' "$file" > payload.json
 
-            # Cambiamos ${CRON} por una validación más simple para evitar el símbolo #
             CRON_LEN=$(echo -n "$CRON" | wc -c)
             if [ "$CRON" != "" ] && [ "$CRON" != "null" ] && [ "$CRON_LEN" -gt 5 ]; then
               echo "⏰ Añadiendo horario: $CRON"
@@ -132,10 +131,13 @@ jobs:
         
             if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
               echo "🆕 Creando..."
-              databricks alerts-v2 create-alert --json @payload.json
+              databricks alerts-v2 create-alert --json @payload.json || { echo "❌ Error al crear $NAME"; exit 1; }
             else
               echo "🔄 Actualizando ID: $EXISTING_ID"
               jq 'del(.parent_path)' payload.json > update_payload.json
-              databricks alerts-v2 update-alert "$EXISTING_ID" "display_name,query_text,warehouse_id,evaluation,schedule" --json @update_payload.json
+              # Aquí capturamos el error específico si falla el update
+              databricks alerts-v2 update-alert "$EXISTING_ID" "display_name,query_text,warehouse_id,evaluation,schedule" --json @update_payload.json || { echo "❌ Error al actualizar $NAME"; exit 1; }
             fi
+            echo "✅ Finalizado: $NAME"
+            echo "---"
           done
