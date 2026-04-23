@@ -110,4 +110,3 @@ jobs:
               databricks alerts-v2 update-alert "$EXISTING_ID" "display_name,query_text,warehouse_id,evaluation,schedule" --json @update_payload.json
             fi
           done
-
