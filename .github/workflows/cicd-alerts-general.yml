@@ -70,85 +70,71 @@ jobs:
           SOURCE_CATALOG: "main_dev" # Siempre es nuestra base en el código
           DEFAULT_COLUMN: "cnt"
         run: |
-          # Solo procesamos si la carpeta existe
-          run: |
           if [ ! -d "alerts_code" ]; then echo "No alerts to deploy"; exit 0; fi
           
           for file in alerts_code/*.json; do
             NAME=$(jq -r '.display_name' "$file")
             echo "🔍 Procesando: $NAME"
           
-            # 1. Metadatos
             CRON=$(jq -r '.schedule.quartz_cron_schedule // ""' "$file")
             TZ=$(jq -r '.schedule.timezone_id // "UTC"' "$file")
             RAW_QUERY=$(jq -r '.query_text // ""' "$file")
-          
-            # 2. Extracción de Columna
-            FALLBACK_COL=$(echo "$RAW_QUERY" | tr -d '\n' | grep -iP -o '(\w+)(?=\s+FROM)' | tail -n 1)
             
+            FALLBACK_COL=$(echo "$RAW_QUERY" | tr -d '\n' | grep -iP -o '(\w+)(?=\s+FROM)' | tail -n 1)
             if [ -z "$FALLBACK_COL" ]; then
                 FALLBACK_COL=$(echo "$RAW_QUERY" | tr -d '\n' | grep -iP -o 'SELECT\s+\K\w+' | head -n 1)
             fi
-          
-            if [ -z "$FALLBACK_COL" ] || [ "$FALLBACK_COL" == "*" ]; then
-                FALLBACK_COL="$DEFAULT_COLUMN" 
-            fi
-            
-            echo "📊 Columna detectada: $FALLBACK_COL"
-          
-            # 3. Transformación de Query y Construcción Base
-            # Extraemos la query, aplicamos el cambio de catálogo y la limpiamos
-            FINAL_QUERY=$(jq -r '.query_text' "$file" | sed "s/$SOURCE_CATALOG/$TARGET_CATALOG/g")
-            
-            # Si por algún motivo la query queda vacía, la rescatamos del archivo original directamente
-            if [ -z "$FINAL_QUERY" ] || [ "$FINAL_QUERY" == "null" ]; then
-                FINAL_QUERY=$(jq -r '.query_text' "$file")
-            fi
+            [ -z "$FALLBACK_COL" ] && FALLBACK_COL="$DEFAULT_COLUMN"
 
-            jq -n \
-               --arg NAME "$NAME" \
-               --arg QUERY "$FINAL_QUERY" \
-               --arg WH "$TARGET_WH" \
+            jq --arg WH "$TARGET_WH" \
                --arg PATH "$TARGET_PATH" \
-               --arg OP "$(jq -r '.evaluation.comparison_operator' "$file")" \
+               --arg S_CAT "$SOURCE_CATALOG" \
+               --arg T_CAT "$TARGET_CATALOG" \
                --arg COL "$FALLBACK_COL" \
-               --argjson ORIG_THRESH "$(jq '.evaluation.threshold' "$file")" \
             '
             {
-              "display_name": $NAME,
-              "query_text": $QUERY,
+              "display_name": .display_name,
+              "query_text": (.query_text | gsub($S_CAT; $T_CAT)), 
               "warehouse_id": $WH,
               "parent_path": $PATH,
               "evaluation": {
-                "comparison_operator": $OP,
-                "source": { "name": $COL },
+                "comparison_operator": .evaluation.comparison_operator,
+                "source": { "name": (if .evaluation.source.name == null or .evaluation.source.name == "" then $COL else .evaluation.source.name end) },
                 "threshold": {
                   "value": (
-                    if $ORIG_THRESH.value.double_value != null then { "double_value": ($ORIG_THRESH.value.double_value | tonumber) }
-                    elif $ORIG_THRESH.value.string_value != null then { "string_value": $ORIG_THRESH.value.string_value }
+                    if .evaluation.threshold.value.double_value != null then { "double_value": (.evaluation.threshold.value.double_value | tonumber) }
+                    elif .evaluation.threshold.value.string_value != null then { "string_value": .evaluation.threshold.value.string_value }
                     else { "double_value": 0 }
                     end
                   )
                 }
               }
-            }' > payload.json
-          
-            # 4. Horario
-            if [ ! -z "$CRON" ] && [ "$CRON" != "null" ] && [ "$CRON" != "" ]; then
+            }
+            ' "$file" > payload.json
+
+            # Cambiamos ${CRON} por una validación más simple para evitar el símbolo #
+            CRON_LEN=$(echo -n "$CRON" | wc -c)
+            if [ "$CRON" != "" ] && [ "$CRON" != "null" ] && [ "$CRON_LEN" -gt 5 ]; then
               echo "⏰ Añadiendo horario: $CRON"
               jq --arg CRON "$CRON" --arg TZ "$TZ" \
                 '. + { "schedule": { "quartz_cron_schedule": $CRON, "timezone_id": $TZ, "pause_status": "PAUSED" } }' \
                 payload.json > temp_payload.json && mv temp_payload.json payload.json
             fi
-          
-            # 5. Sincronización (Create/Update)
+
+            FINAL_QUERY_CHECK=$(jq -r '.query_text' payload.json)
+            if [ -z "$FINAL_QUERY_CHECK" ] || [ "$FINAL_QUERY_CHECK" == "null" ] || [ "$FINAL_QUERY_CHECK" == "" ]; then
+                echo "❌ ERROR: query_text vacio para $NAME"
+                cat "$file"
+                exit 1
+            fi
+
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
         
             if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
-              echo "🆕 Creando alerta..."
+              echo "🆕 Creando..."
               databricks alerts-v2 create-alert --json @payload.json
             else
-              echo "🔄 Actualizando alerta ID: $EXISTING_ID"
+              echo "🔄 Actualizando ID: $EXISTING_ID"
               jq 'del(.parent_path)' payload.json > update_payload.json
               databricks alerts-v2 update-alert "$EXISTING_ID" "display_name,query_text,warehouse_id,evaluation,schedule" --json @update_payload.json
             fi
