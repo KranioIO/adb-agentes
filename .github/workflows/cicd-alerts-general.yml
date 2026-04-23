@@ -83,7 +83,7 @@ jobs:
             fi
             [ -z "$FALLBACK_COL" ] && FALLBACK_COL="cnt"
 
-            # 3. Transformación con JQ: Limpieza profunda de Schedule y Source
+           # 3. Transformación con JQ: Limpieza profunda y validación de Schedule
             jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" \
                --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" \
                --arg FALLBACK "$FALLBACK_COL" '
@@ -100,9 +100,16 @@ jobs:
                 }
               }
             } + (
-              # Solo añadimos el objeto schedule si tiene un cron válido (no vacío)
+              # Verificamos si existe un cron válido. 
+              # Si existe, extraemos sus campos directamente al nuevo objeto schedule.
               if .schedule.quartz_cron_schedule != null and .schedule.quartz_cron_schedule != "" 
-              then { "schedule": .schedule } 
+              then { 
+                "schedule": {
+                  "quartz_cron_schedule": .schedule.quartz_cron_schedule,
+                  "timezone_id": (.schedule.timezone_id // "UTC"),
+                  "pause_status": (.schedule.pause_status // "PAUSED")
+                } 
+              } 
               else {} 
               end
             ) | del(.. | nulls)
