@@ -2,7 +2,7 @@
   "create_time":"2026-03-26T18:41:05Z",
   "display_name":"alerta_test",
   "effective_run_as": {
-    "user_name":"jeiko@kranio.io"
+    "user_name":"stephane@kranio.io"
   },
   "evaluation": {
     "comparison_operator":"EQUAL",
@@ -16,9 +16,9 @@
   "parent_path":"/Workspace/Users/jeiko@kranio.io/test-bundle-con-action/new_bundle/resources/alerts",
   "query_text":"-- Alerta de prueba: selecciona un mensaje de alerta\nSELECT 'Alerta22 de prueba: este es un mensaje de prueba.' AS alerta;",
   "schedule": {
-    "quartz_cron_schedule":"",
-    "timezone_id":""
+    "quartz_cron_schedule":"59 8 10 * * ?",
+    "timezone_id":"America/Bogota"
   },
-  "update_time":"2026-03-26T18:58:38Z",
+  "update_time":"2026-04-23T15:09:01Z",
   "warehouse_id":""
 }

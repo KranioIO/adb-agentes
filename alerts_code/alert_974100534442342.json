@@ -16,9 +16,9 @@
   "parent_path":"/Workspace/Users/stephane@kranio.io",
   "query_text":"",
   "schedule": {
-    "quartz_cron_schedule":"",
-    "timezone_id":""
+    "quartz_cron_schedule":"41 8 10 * * ?",
+    "timezone_id":"America/Bogota"
   },
-  "update_time":"2026-04-16T14:03:05Z",
+  "update_time":"2026-04-23T15:08:45Z",
   "warehouse_id":"af6acdfdf7d45afd"
 }
