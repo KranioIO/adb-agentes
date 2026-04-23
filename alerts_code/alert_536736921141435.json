@@ -1,0 +1,41 @@
+{
+  "create_time":"2026-04-20T17:58:13Z",
+  "display_name":"alert cientificos de datos",
+  "effective_run_as": {
+    "user_name":"stephane@kranio.io"
+  },
+  "evaluation": {
+    "comparison_operator":"LESS_THAN",
+    "last_evaluated_at":"2026-04-22T18:21:25Z",
+    "notification": {
+      "notify_on_ok":false,
+      "subscriptions": [
+        {
+          "user_email":"stephane@kranio.io"
+        }
+      ]
+    },
+    "source": {
+      "aggregation":"COUNT",
+      "display":"source",
+      "name":"price_predicted"
+    },
+    "state":"OK",
+    "threshold": {
+      "value": {
+        "double_value":0
+      }
+    }
+  },
+  "id":"536736921141435",
+  "lifecycle_state":"ACTIVE",
+  "owner_user_name":"stephane@kranio.io",
+  "parent_path":"/Workspace/Users/stephane@kranio.io",
+  "query_text":"SELECT \n  execution_date,\n  sqft,\n  price_predicted,\n  -- Creamos una etiqueta de estado para el Dashboard\n  CASE \n    WHEN price_predicted \u003c 0 THEN 'Error: Precio Negativo'\n    WHEN price_predicted \u003e 1000 THEN 'Alerta: Precio muy alto'\n    ELSE 'OK'\n  END AS validation_status\nFROM dev_catalog.default.ma_table_scores\nORDER BY execution_date DESC",
+  "schedule": {
+    "quartz_cron_schedule":"54 20 13 * * ?",
+    "timezone_id":"America/Bogota"
+  },
+  "update_time":"2026-04-20T18:22:21Z",
+  "warehouse_id":"af6acdfdf7d45afd"
+}
