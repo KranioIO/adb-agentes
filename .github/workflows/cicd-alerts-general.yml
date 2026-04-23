@@ -64,26 +64,13 @@ jobs:
 
           for file in alerts_code/*.json; do
             NAME=$(jq -r '.display_name' "$file")
-            # Extraer query y limpiar saltos de línea para que grep funcione mejor
-            RAW_QUERY=$(jq -r '.query_text // ""' "$file" | tr -d '\n' | tr -s ' ')
+            echo "🔍 Procesando: $NAME"
 
-            echo "🔍 Procesando: $NAME en entorno ${{ vars.CATALOG_NAME }}"
+            # 1. Extraer el CRON a una variable de Bash para validar
+            CRON=$(jq -r '.schedule.quartz_cron_schedule // ""' "$file")
+            TZ=$(jq -r '.schedule.timezone_id // "UTC"' "$file")
 
-            # 1. Validación de Query vacía
-            if [ -z "$RAW_QUERY" ] || [ "$RAW_QUERY" == " " ]; then
-              echo "⚠️ Saltando $NAME: No se encontró query_text válido."
-              continue
-            fi
-
-            # 2. Extracción de columna de emergencia (Fallback)
-            # Intenta: 1. Palabra antes de FROM | 2. Primera palabra tras SELECT | 3. Valor "cnt"
-            FALLBACK_COL=$(echo "$RAW_QUERY" | grep -iP -o '(\w+)(?=\s+FROM)' | tail -n 1)
-            if [ -z "$FALLBACK_COL" ]; then
-                FALLBACK_COL=$(echo "$RAW_QUERY" | grep -iP -o 'SELECT\s+\K\w+' | head -n 1)
-            fi
-            [ -z "$FALLBACK_COL" ] && FALLBACK_COL="cnt"
-
-           # 3. Transformación con JQ: Limpieza profunda y validación de Schedule
+            # 2. Construcción base del JSON (Sin el schedule)
             jq --arg WH "$TARGET_WH" --arg PATH "$TARGET_PATH" \
                --arg S_CAT "$SOURCE_CATALOG" --arg T_CAT "$TARGET_CATALOG" \
                --arg FALLBACK "$FALLBACK_COL" '
@@ -99,31 +86,26 @@ jobs:
                   "name": (if .evaluation.source.name == null or .evaluation.source.name == "" then $FALLBACK else .evaluation.source.name end)
                 }
               }
-            } + (
-              # Verificamos si existe un cron válido. 
-              # Si existe, extraemos sus campos directamente al nuevo objeto schedule.
-              if .schedule.quartz_cron_schedule != null and .schedule.quartz_cron_schedule != "" 
-              then { 
-                "schedule": {
-                  "quartz_cron_schedule": .schedule.quartz_cron_schedule,
-                  "timezone_id": (.schedule.timezone_id // "UTC"),
-                  "pause_status": (.schedule.pause_status // "PAUSED")
-                } 
-              } 
-              else {} 
-              end
-            ) | del(.. | nulls)
-            ' "$file" > payload.json
+            }' "$file" > payload.json
 
-            # 4. Verificar existencia e Idempotencia
+            # 3. Si el CRON no está vacío, se lo inyectamos al payload.json
+            if [ ! -z "$CRON" ] && [ "$CRON" != "null" ] && [ "$CRON" != "" ]; then
+              echo "⏰ Añadiendo horario: $CRON"
+              jq --arg CRON "$CRON" --arg TZ "$TZ" \
+                '. + { "schedule": { "quartz_cron_schedule": $CRON, "timezone_id": $TZ, "pause_status": "PAUSED" } }' \
+                payload.json > temp_payload.json && mv temp_payload.json payload.json
+            else
+              echo "🛑 Sin horario válido, se creará sin programación."
+            fi
+
+            # 4. Enviar a Databricks (Create o Update)
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' | head -n 1)
 
             if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
-              echo "🆕 Modo CREACIÓN"
+              echo "🆕 Creando..."
               databricks alerts-v2 create-alert --json @payload.json
             else
-              echo "🔄 Modo ACTUALIZACIÓN (ID: $EXISTING_ID)"
-              # Eliminar parent_path para evitar error de inmutabilidad en updates
+              echo "🔄 Actualizando ID: $EXISTING_ID"
               jq 'del(.parent_path)' payload.json > update_payload.json
               databricks alerts-v2 update-alert "$EXISTING_ID" "display_name,query_text,warehouse_id,evaluation,schedule" --json @update_payload.json
             fi
