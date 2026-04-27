@@ -186,7 +186,7 @@ jobs:
           while IFS=$'\t' read -r ALERT_ID ALERT_NAME; do
             if ! echo "$DESIRED_ALERTS" | grep -qxF "$ALERT_NAME"; then
               echo "🗑️  Eliminando alerta obsoleta: $ALERT_NAME (ID: $ALERT_ID)"
-              databricks alerts-v2 delete-alert "$ALERT_ID"
+              databricks alerts-v2 trash-alert "$ALERT_ID"
             else
               echo "✅ Conservada: $ALERT_NAME"
             fi
