@@ -6,7 +6,7 @@
   },
   "evaluation": {
     "comparison_operator":"EQUAL",
-    "last_evaluated_at":"2026-03-26T19:57:42Z",
+    "last_evaluated_at":"2026-04-26T20:43:00Z",
     "notification": {
       "subscriptions": [
         {
@@ -18,7 +18,7 @@
       "display":"mensaje_prueba",
       "name":"mensaje_prueba"
     },
-    "state":"OK",
+    "state":"TRIGGERED",
     "threshold": {
       "value": {
         "string_value":"Hola desde el Bundle"

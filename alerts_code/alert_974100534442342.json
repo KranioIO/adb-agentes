@@ -6,9 +6,11 @@
   },
   "evaluation": {
     "comparison_operator":"EQUAL",
+    "last_evaluated_at":"2026-04-26T15:08:44Z",
     "source": {
       "name":""
-    }
+    },
+    "state":"ERROR"
   },
   "id":"974100534442342",
   "lifecycle_state":"ACTIVE",
