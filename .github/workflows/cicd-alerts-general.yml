@@ -70,30 +70,42 @@ jobs:
           SOURCE_CATALOG: "main_dev" # Siempre es nuestra base en el código
           DEFAULT_COLUMN: "cnt"
         run: |
-          if [ ! -d "alerts_code" ]; then echo "No alerts to deploy"; exit 0; fi
-          
+          if [ ! -d "alerts_code" ]; then echo "No hay alertas para desplegar"; exit 0; fi
+
+          # ═══════════════════════════════════════════════════
+          # FASE 1: Crear o actualizar alertas del código
+          # ═══════════════════════════════════════════════════
           for file in alerts_code/*.json; do
             NAME=$(jq -r '.display_name' "$file")
             echo "🔍 Analizando: $NAME"
-        
-            # 1. Limpieza con manejo explícito de threshold
+
+            # Debug: ver el threshold tal como viene en el JSON fuente
+            echo "📎 Threshold RAW:"
+            jq '.evaluation.threshold' "$file"
+
+            # Construir payload limpio con manejo seguro de threshold
             jq --arg WH "$TARGET_WH" \
                --arg PATH "$TARGET_PATH" \
                --arg DEF_COL "$DEFAULT_COLUMN" \
                --arg S_CAT "$SOURCE_CATALOG" \
                --arg T_CAT "$TARGET_CATALOG" '
-        
-            # Construir threshold de forma segura
+
+            # Función: construir threshold de forma segura
+            # - Retorna null si el operador es IS_NULL/IS_NOT_NULL (no requiere threshold)
+            # - Limpia sub-campos null y verifica que quede al menos un valor válido
+            # - Si todo es null/vacío, retorna null para evitar enviar {"value": {}}
             def safe_threshold:
               if .comparison_operator == "IS_NULL" or .comparison_operator == "IS_NOT_NULL"
               then null
-              elif .threshold.value != null
-              then { "value": (.threshold.value | with_entries(select(.value != null))) }
-              elif .threshold.column != null
-              then { "column": (.threshold.column | with_entries(select(.value != null))) }
+              elif .threshold.value != null then
+                (.threshold.value | with_entries(select(.value != null))) as $v |
+                if ($v | length) > 0 then { "value": $v } else null end
+              elif .threshold.column != null then
+                (.threshold.column | with_entries(select(.value != null))) as $c |
+                if ($c | length) > 0 then { "column": $c } else null end
               else null
               end;
-        
+
             {
               "display_name": .display_name,
               "query_text": ((.query_text // "") | gsub($S_CAT; $T_CAT)),
@@ -108,8 +120,10 @@ jobs:
                              else .source.name end)
                   }
                 }
+                # Agregar threshold solo si safe_threshold retorna algo válido
                 + (safe_threshold as $th |
                    if $th != null then { "threshold": $th } else {} end)
+                # Preservar notificaciones si existen
                 + (if .notification != null
                    then { "notification": .notification }
                    else {} end)
@@ -121,25 +135,61 @@ jobs:
                 else null end
               )
             }
+            # Eliminar nulls solo en el primer nivel (no recursivo)
             | with_entries(select(.value != null))
             ' "$file" > payload_limpio.json
-        
+
             echo "📋 Payload generado:"
             cat payload_limpio.json
-        
-            # 2. Verificar existencia
+
+            # Validar: si el operador requiere threshold y no lo tiene, saltar esta alerta
+            OP=$(jq -r '.evaluation.comparison_operator' payload_limpio.json)
+            HAS_THRESHOLD=$(jq '.evaluation.threshold != null' payload_limpio.json)
+
+            if [[ "$OP" != "IS_NULL" && "$OP" != "IS_NOT_NULL" && "$HAS_THRESHOLD" == "false" ]]; then
+              echo "⚠️ SKIP: '$NAME' tiene operador '$OP' pero sin threshold válido en el JSON fuente."
+              continue
+            fi
+
+            # Verificar si la alerta ya existe en el workspace
             EXISTING_ID=$(databricks alerts-v2 list-alerts -o json \
               | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' \
               | head -n 1)
-            
+
             if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
               echo "🆕 Modo CREACIÓN"
               databricks alerts-v2 create-alert --json @payload_limpio.json
             else
               echo "🔄 Modo ACTUALIZACIÓN (ID: $EXISTING_ID)"
+              # Quitar parent_path porque no se puede actualizar
               jq 'del(.parent_path)' payload_limpio.json > payload_update.json
-              
+
               MASK="display_name,query_text,warehouse_id,evaluation,schedule"
               databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload_update.json
             fi
           done
+
+          # ═══════════════════════════════════════════════════
+          # FASE 2: Eliminar alertas obsoletas (sincronización)
+          # Solo toca alertas dentro de TARGET_PATH
+          # ═══════════════════════════════════════════════════
+          echo ""
+          echo "🧹 Sincronización: eliminando alertas obsoletas..."
+
+          # Recopilar los nombres de todas las alertas definidas en el código
+          DESIRED_ALERTS=$(for f in alerts_code/*.json; do jq -r '.display_name' "$f"; done)
+
+          # Listar alertas existentes en el workspace, filtradas por TARGET_PATH
+          databricks alerts-v2 list-alerts -o json | \
+            jq -r --arg PATH "$TARGET_PATH" \
+            '.[] | select(.parent_path == $PATH) | "\(.id)\t\(.display_name)"' | \
+          while IFS=$'\t' read -r ALERT_ID ALERT_NAME; do
+            if ! echo "$DESIRED_ALERTS" | grep -qxF "$ALERT_NAME"; then
+              echo "🗑️  Eliminando alerta obsoleta: $ALERT_NAME (ID: $ALERT_ID)"
+              databricks alerts-v2 delete-alert "$ALERT_ID"
+            else
+              echo "✅ Conservada: $ALERT_NAME"
+            fi
+          done
+
+          echo "🏁 Despliegue completado."
