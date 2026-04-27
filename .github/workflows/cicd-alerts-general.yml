@@ -69,78 +69,77 @@ jobs:
           TARGET_CATALOG: ${{ vars.CATALOG_NAME }}
           SOURCE_CATALOG: "main_dev" # Siempre es nuestra base en el código
           DEFAULT_COLUMN: "cnt"
-        run: |
-          if [ ! -d "alerts_code" ]; then echo "No alerts to deploy"; exit 0; fi
-          
-          for file in alerts_code/*.json; do
-            NAME=$(jq -r '.display_name' "$file")
-            echo "🔍 Analizando: $NAME"
-        
-            # 1. Limpieza con manejo explícito de threshold
-            jq --arg WH "$TARGET_WH" \
-               --arg PATH "$TARGET_PATH" \
-               --arg DEF_COL "$DEFAULT_COLUMN" \
-               --arg S_CAT "$SOURCE_CATALOG" \
-               --arg T_CAT "$TARGET_CATALOG" '
-        
-            # Construir threshold de forma segura
-            def safe_threshold:
-              if .comparison_operator == "IS_NULL" or .comparison_operator == "IS_NOT_NULL"
-              then null
-              elif .threshold.value != null
-              then { "value": (.threshold.value | with_entries(select(.value != null))) }
-              elif .threshold.column != null
-              then { "column": (.threshold.column | with_entries(select(.value != null))) }
-              else null
-              end;
-        
-            {
-              "display_name": .display_name,
-              "query_text": ((.query_text // "") | gsub($S_CAT; $T_CAT)),
-              "warehouse_id": $WH,
-              "parent_path": $PATH,
-              "evaluation": (
-                .evaluation | {
-                  "comparison_operator": .comparison_operator,
-                  "source": {
-                    "name": (.source.name // $DEF_COL)
-                  }
-                }
-                # Agregar threshold solo si safe_threshold retorna algo
-                + (safe_threshold as $th |
-                   if $th != null then { "threshold": $th } else {} end)
-                # Preservar notifications si existen
-                + (if .notification != null
-                   then { "notification": .notification }
-                   else {} end)
-              ),
-              "schedule": (
-                if .schedule.quartz_cron_schedule != null and
-                   .schedule.quartz_cron_schedule != ""
-                then .schedule
-                else null end
-              )
-            }
-            # Eliminar nulls SOLO en el primer nivel, no recursivamente
-            | with_entries(select(.value != null))
-            ' "$file" > payload_limpio.json
-        
-            echo "📋 Payload generado:"
-            cat payload_limpio.json
-        
-            # 2. Verificar existencia
-            EXISTING_ID=$(databricks alerts-v2 list-alerts -o json \
-              | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' \
-              | head -n 1)
+          run: |
+            if [ ! -d "alerts_code" ]; then echo "No alerts to deploy"; exit 0; fi
             
-            if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
-              echo "🆕 Modo CREACIÓN"
-              databricks alerts-v2 create-alert --json @payload_limpio.json
-            else
-              echo "🔄 Modo ACTUALIZACIÓN (ID: $EXISTING_ID)"
-              jq 'del(.parent_path)' payload_limpio.json > payload_update.json
+            for file in alerts_code/*.json; do
+              NAME=$(jq -r '.display_name' "$file")
+              echo "🔍 Analizando: $NAME"
+          
+              # 1. Limpieza con manejo explícito de threshold
+              jq --arg WH "$TARGET_WH" \
+                 --arg PATH "$TARGET_PATH" \
+                 --arg DEF_COL "$DEFAULT_COLUMN" \
+                 --arg S_CAT "$SOURCE_CATALOG" \
+                 --arg T_CAT "$TARGET_CATALOG" '
+          
+              # Construir threshold de forma segura
+              def safe_threshold:
+                if .comparison_operator == "IS_NULL" or .comparison_operator == "IS_NOT_NULL"
+                then null
+                elif .threshold.value != null
+                then { "value": (.threshold.value | with_entries(select(.value != null))) }
+                elif .threshold.column != null
+                then { "column": (.threshold.column | with_entries(select(.value != null))) }
+                else null
+                end;
+          
+              {
+                "display_name": .display_name,
+                "query_text": ((.query_text // "") | gsub($S_CAT; $T_CAT)),
+                "warehouse_id": $WH,
+                "parent_path": $PATH,
+                "evaluation": (
+                  .evaluation | {
+                    "comparison_operator": .comparison_operator,
+                    "source": {
+                      "name": (if .source.name == null or .source.name == ""
+                               then $DEF_COL
+                               else .source.name end)
+                    }
+                  }
+                  + (safe_threshold as $th |
+                     if $th != null then { "threshold": $th } else {} end)
+                  + (if .notification != null
+                     then { "notification": .notification }
+                     else {} end)
+                ),
+                "schedule": (
+                  if .schedule.quartz_cron_schedule != null and
+                     .schedule.quartz_cron_schedule != ""
+                  then .schedule
+                  else null end
+                )
+              }
+              | with_entries(select(.value != null))
+              ' "$file" > payload_limpio.json
+          
+              echo "📋 Payload generado:"
+              cat payload_limpio.json
+          
+              # 2. Verificar existencia
+              EXISTING_ID=$(databricks alerts-v2 list-alerts -o json \
+                | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' \
+                | head -n 1)
               
-              MASK="display_name,query_text,warehouse_id,evaluation,schedule"
-              databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload_update.json
-            fi
-          done
+              if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
+                echo "🆕 Modo CREACIÓN"
+                databricks alerts-v2 create-alert --json @payload_limpio.json
+              else
+                echo "🔄 Modo ACTUALIZACIÓN (ID: $EXISTING_ID)"
+                jq 'del(.parent_path)' payload_limpio.json > payload_update.json
+                
+                MASK="display_name,query_text,warehouse_id,evaluation,schedule"
+                databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload_update.json
+              fi
+            done
