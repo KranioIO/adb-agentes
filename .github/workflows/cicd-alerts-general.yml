@@ -76,13 +76,16 @@ jobs:
           # FASE 0: LIMPIEZA TOTAL DEL DESTINO (Wipe)
           # Esto garantiza que lo que no esté en Git, no esté en la UI.
           # ═══════════════════════════════════════════════════
-          EXISTING_IDS=$(databricks alerts-v2 list-alerts -o json | \
-            jq -r --arg PATH "$TARGET_PATH" '.[] | select(.parent_path | contains($PATH)) | .id')
+          echo "🧹 Limpiando alertas..."
+
+          # Obtenemos TODOS los IDs que la CLI devuelva, sin filtros complicados
+          # Usamos 'select(.id != null)' que es un campo que TODA alerta tiene
+          EXISTING_IDS=$(databricks alerts-v2 list-alerts -o json | jq -r '.[] | select(.id != null) | .id')
 
           for id in $EXISTING_IDS; do
-            if [ "$id" != "null" ] && [ ! -z "$id" ]; then
-              databricks alerts-v2 trash-alert "$id" || echo "❌ Error al eliminar alerta con ID $id"
-            fi
+            echo "🗑️ Eliminando alerta ID: $id"
+            # Esto es exactamente lo que hiciste en tu bash
+            databricks alerts-v2 trash-alert "$id" || echo "⚠️ Saltando ID: $id"
           done
 
           # ═══════════════════════════════════════════════════
