@@ -134,7 +134,7 @@ jobs:
               ),
               "schedule": (
                 if .schedule.quartz_cron_schedule != null and .schedule.quartz_cron_schedule != ""
-                then .schedule
+                then .schedule + { "pause_status": "ACTIVE" } # <--- SE ACTIVAN TODAS LAS ALERTAS NUEVAS
                 else null end
               )
             }
