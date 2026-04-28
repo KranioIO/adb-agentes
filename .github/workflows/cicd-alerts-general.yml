@@ -73,27 +73,37 @@ jobs:
           if [ ! -d "alerts_code" ]; then echo "No hay alertas para desplegar"; exit 0; fi
 
           # ═══════════════════════════════════════════════════
-          # FASE 1: Crear o actualizar alertas del código
+          # FASE 0: LIMPIEZA TOTAL DEL DESTINO (Wipe)
+          # Esto garantiza que lo que no esté en Git, no esté en la UI.
+          # ═══════════════════════════════════════════════════
+          echo "🧹 Limpiando el entorno de destino: $TARGET_PATH"
+          
+          # Obtenemos los IDs de las alertas que ya existen en esa carpeta específica
+          EXISTING_IDS=$(databricks alerts-v2 list-alerts -o json | \
+            jq -r --arg PATH "$TARGET_PATH" '.[] | select(.parent_path == $PATH) | .id')
+
+          for id in $EXISTING_IDS; do
+            if [ "$id" != "null" ] && [ ! -z "$id" ]; then
+              echo "🗑️ Eliminando alerta antigua (ID: $id) para sincronización total"
+              databricks alerts-v2 trash-alert "$id"
+            fi
+          done
+
+          # ═══════════════════════════════════════════════════
+          # FASE 1: DESPLIEGUE (Creación desde cero)
           # ═══════════════════════════════════════════════════
           for file in alerts_code/*.json; do
             NAME=$(jq -r '.display_name' "$file")
-            echo "🔍 Analizando: $NAME"
+            echo "-------------------------------------------------------"
+            echo "🔍 Procesando: $NAME"
 
-            # Debug: ver el threshold tal como viene en el JSON fuente
-            echo "📎 Threshold RAW:"
-            jq '.evaluation.threshold' "$file"
-
-            # Construir payload limpio con manejo seguro de threshold
+            # Construir payload limpio con tu lógica de safe_threshold
             jq --arg WH "$TARGET_WH" \
                --arg PATH "$TARGET_PATH" \
                --arg DEF_COL "$DEFAULT_COLUMN" \
                --arg S_CAT "$SOURCE_CATALOG" \
                --arg T_CAT "$TARGET_CATALOG" '
 
-            # Función: construir threshold de forma segura
-            # - Retorna null si el operador es IS_NULL/IS_NOT_NULL (no requiere threshold)
-            # - Limpia sub-campos null y verifica que quede al menos un valor válido
-            # - Si todo es null/vacío, retorna null para evitar enviar {"value": {}}
             def safe_threshold:
               if .comparison_operator == "IS_NULL" or .comparison_operator == "IS_NOT_NULL"
               then null
@@ -120,76 +130,31 @@ jobs:
                              else .source.name end)
                   }
                 }
-                # Agregar threshold solo si safe_threshold retorna algo válido
-                + (safe_threshold as $th |
-                   if $th != null then { "threshold": $th } else {} end)
-                # Preservar notificaciones si existen
-                + (if .notification != null
-                   then { "notification": .notification }
-                   else {} end)
+                + (safe_threshold as $th | if $th != null then { "threshold": $th } else {} end)
+                + (if .notification != null then { "notification": .notification } else {} end)
               ),
               "schedule": (
-                if .schedule.quartz_cron_schedule != null and
-                   .schedule.quartz_cron_schedule != ""
+                if .schedule.quartz_cron_schedule != null and .schedule.quartz_cron_schedule != ""
                 then .schedule
                 else null end
               )
             }
-            # Eliminar nulls solo en el primer nivel (no recursivo)
             | with_entries(select(.value != null))
             ' "$file" > payload_limpio.json
 
-            echo "📋 Payload generado:"
-            cat payload_limpio.json
-
-            # Validar: si el operador requiere threshold y no lo tiene, saltar esta alerta
+            # Validación de seguridad: si el operador requiere threshold y no quedó nada, saltar
             OP=$(jq -r '.evaluation.comparison_operator' payload_limpio.json)
             HAS_THRESHOLD=$(jq '.evaluation.threshold != null' payload_limpio.json)
 
             if [[ "$OP" != "IS_NULL" && "$OP" != "IS_NOT_NULL" && "$HAS_THRESHOLD" == "false" ]]; then
-              echo "⚠️ SKIP: '$NAME' tiene operador '$OP' pero sin threshold válido en el JSON fuente."
+              echo "⚠️ SKIP: '$NAME' no tiene threshold válido. Revisa el origen."
               continue
             fi
 
-            # Verificar si la alerta ya existe en el workspace
-            EXISTING_ID=$(databricks alerts-v2 list-alerts -o json \
-              | jq -r --arg NAME "$NAME" '.[] | select(.display_name == $NAME) | .id' \
-              | head -n 1)
-
-            if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" == "null" ]; then
-              echo "🆕 Modo CREACIÓN"
-              databricks alerts-v2 create-alert --json @payload_limpio.json
-            else
-              echo "🔄 Modo ACTUALIZACIÓN (ID: $EXISTING_ID)"
-              # Quitar parent_path porque no se puede actualizar
-              jq 'del(.parent_path)' payload_limpio.json > payload_update.json
-
-              MASK="display_name,query_text,warehouse_id,evaluation,schedule"
-              databricks alerts-v2 update-alert "$EXISTING_ID" "$MASK" --json @payload_update.json
-            fi
+            # Como limpiamos todo en la FASE 0, aquí siempre es CREACIÓN
+            echo "🆕 Creando alerta en $TARGET_PATH..."
+            databricks alerts-v2 create-alert --json @payload_limpio.json || echo "❌ Error al crear $NAME"
           done
 
-          # ═══════════════════════════════════════════════════
-          # FASE 2: Eliminar alertas obsoletas (sincronización)
-          # Solo toca alertas dentro de TARGET_PATH
-          # ═══════════════════════════════════════════════════
-          echo ""
-          echo "🧹 Sincronización: eliminando alertas obsoletas..."
-
-          # Recopilar los nombres de todas las alertas definidas en el código
-          DESIRED_ALERTS=$(for f in alerts_code/*.json; do jq -r '.display_name' "$f"; done)
-
-          # Listar alertas existentes en el workspace, filtradas por TARGET_PATH
-          databricks alerts-v2 list-alerts -o json | \
-            jq -r --arg PATH "$TARGET_PATH" \
-            '.[] | select(.parent_path == $PATH) | "\(.id)\t\(.display_name)"' | \
-          while IFS=$'\t' read -r ALERT_ID ALERT_NAME; do
-            if ! echo "$DESIRED_ALERTS" | grep -qxF "$ALERT_NAME"; then
-              echo "🗑️  Eliminando alerta obsoleta: $ALERT_NAME (ID: $ALERT_ID)"
-              databricks alerts-v2 trash-alert "$ALERT_ID"
-            else
-              echo "✅ Conservada: $ALERT_NAME"
-            fi
-          done
-
-          echo "🏁 Despliegue completado."
+          echo "-------------------------------------------------------"
+          echo "🏁 Sincronización completada. El entorno es un espejo de Git."
