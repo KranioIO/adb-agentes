@@ -76,16 +76,12 @@ jobs:
           # FASE 0: LIMPIEZA TOTAL DEL DESTINO (Wipe)
           # Esto garantiza que lo que no esté en Git, no esté en la UI.
           # ═══════════════════════════════════════════════════
-          echo "🧹 Limpiando el entorno de destino: $TARGET_PATH"
-          
-          # Obtenemos los IDs de las alertas que ya existen en esa carpeta específica
           EXISTING_IDS=$(databricks alerts-v2 list-alerts -o json | \
-            jq -r --arg PATH "$TARGET_PATH" '.[] | select(.parent_path == $PATH) | .id')
+            jq -r --arg PATH "$TARGET_PATH" '.[] | select(.parent_path | contains($PATH)) | .id')
 
           for id in $EXISTING_IDS; do
             if [ "$id" != "null" ] && [ ! -z "$id" ]; then
-              echo "🗑️ Eliminando alerta antigua (ID: $id) para sincronización total"
-              databricks alerts-v2 trash-alert "$id"
+              databricks alerts-v2 trash-alert "$id" || echo "❌ Error al eliminar alerta con ID $id"
             fi
           done
 
